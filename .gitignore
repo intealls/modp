@@ -1,0 +1,6 @@
+bin/*
+windows/*
+.settings
+.cproject
+.project
+

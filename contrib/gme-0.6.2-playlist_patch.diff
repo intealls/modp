@@ -1,0 +1,93 @@
+diff -Naur ../game-music-emu-0.6.2/gme/Ay_Emu.cpp gme/Ay_Emu.cpp
+--- ../game-music-emu-0.6.2/gme/Ay_Emu.cpp	2017-12-07 04:19:39.000000000 +0100
++++ gme/Ay_Emu.cpp	2019-06-08 02:00:40.192641500 +0200
+@@ -116,7 +116,7 @@
+ static Music_Emu* new_ay_emu () { return BLARGG_NEW Ay_Emu ; }
+ static Music_Emu* new_ay_file() { return BLARGG_NEW Ay_File; }
+ 
+-static gme_type_t_ const gme_ay_type_ = { "ZX Spectrum", 0, &new_ay_emu, &new_ay_file, "AY", 1 };
++static gme_type_t_ const gme_ay_type_ = { "ZX Spectrum", 0, &new_ay_emu, &new_ay_file, "AY", 0x03 };
+ gme_type_t const gme_ay_type = &gme_ay_type_;
+ 
+ // Setup
+diff -Naur ../game-music-emu-0.6.2/gme/Gbs_Emu.cpp gme/Gbs_Emu.cpp
+--- ../game-music-emu-0.6.2/gme/Gbs_Emu.cpp	2017-12-07 04:19:39.000000000 +0100
++++ gme/Gbs_Emu.cpp	2019-06-08 02:00:40.196631100 +0200
+@@ -100,7 +100,7 @@
+ static Music_Emu* new_gbs_emu () { return BLARGG_NEW Gbs_Emu ; }
+ static Music_Emu* new_gbs_file() { return BLARGG_NEW Gbs_File; }
+ 
+-static gme_type_t_ const gme_gbs_type_ = { "Game Boy", 0, &new_gbs_emu, &new_gbs_file, "GBS", 1 };
++static gme_type_t_ const gme_gbs_type_ = { "Game Boy", 0, &new_gbs_emu, &new_gbs_file, "GBS", 0x03 };
+ gme_type_t const gme_gbs_type = &gme_gbs_type_;
+ 
+ // Setup
+diff -Naur ../game-music-emu-0.6.2/gme/Hes_Emu.cpp gme/Hes_Emu.cpp
+--- ../game-music-emu-0.6.2/gme/Hes_Emu.cpp	2017-12-07 04:19:39.000000000 +0100
++++ gme/Hes_Emu.cpp	2019-06-08 02:00:40.198625900 +0200
+@@ -132,7 +132,7 @@
+ static Music_Emu* new_hes_emu () { return BLARGG_NEW Hes_Emu ; }
+ static Music_Emu* new_hes_file() { return BLARGG_NEW Hes_File; }
+ 
+-static gme_type_t_ const gme_hes_type_ = { "PC Engine", 256, &new_hes_emu, &new_hes_file, "HES", 1 };
++static gme_type_t_ const gme_hes_type_ = { "PC Engine", 256, &new_hes_emu, &new_hes_file, "HES", 0x03 };
+ gme_type_t const gme_hes_type = &gme_hes_type_;
+ 
+ 
+diff -Naur ../game-music-emu-0.6.2/gme/M3u_Playlist.cpp gme/M3u_Playlist.cpp
+--- ../game-music-emu-0.6.2/gme/M3u_Playlist.cpp	2017-12-07 04:19:39.000000000 +0100
++++ gme/M3u_Playlist.cpp	2019-06-08 02:50:00.188409600 +0200
+@@ -196,17 +196,25 @@
+ {
+ 	*out = -1;
+ 	int n = -1;
++	int i = 0;
+ 	in = parse_int_( in, &n );
+ 	if ( n >= 0 )
+ 	{
+ 		*out = n;
+-		if ( *in == ':' )
++		for ( i = 0; *in == ':' && i < 2; i++ )
+ 		{
+ 			n = -1;
+ 			in = parse_int_( in + 1, &n );
+ 			if ( n >= 0 )
+ 				*out = *out * 60 + n;
+ 		}
++		if ( *in == '.' )
++		{
++			n = -1;
++			in = parse_int_( in + 1, &n );
++			if ( n >= 0 )
++				*out = (*out * 1000 + 500 + n) / 1000;
++		}
+ 	}
+ 	return in;
+ }
+@@ -356,10 +364,13 @@
+ 		// find end of line and terminate it
+ 		line++;
+ 		char* begin = in;
++		bool only_white = true;
+ 		while ( *in != CR && *in != LF )
+ 		{
+ 			if ( !*in )
+ 				return "Not an m3u playlist";
++			if ( *in != ' ' )
++				only_white = false;
+ 			in++;
+ 		}
+ 		if ( in [0] == CR && in [1] == LF ) // treat CR,LF as a single line
+@@ -367,7 +378,11 @@
+ 		*in++ = 0;
+ 		
+ 		// parse line
+-		if ( *begin == '#' )
++		if ( only_white )
++		{
++			continue;
++		}
++		else if ( *begin == '#' )
+ 		{
+ 			parse_comment( begin, info_, first_comment );
+ 			first_comment = false;
