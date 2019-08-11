@@ -9,7 +9,8 @@ Currently supported backends are libopenmpt and game music emulator. Should play
 
 Command line options:
 
-```-p    Initial path, default is "."
+```
+-p    Initial path, default is "."
 -f    Path to a BDF font, default is an internal font
 -v    Pixel-double font vertically, default is 0
 -a    Auto increment at min length/song end, default is 1
