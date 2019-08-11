@@ -2,6 +2,9 @@
 
 Video game music player.
 
+![fft](https://github.com/intealls/modp/blob/master/fft.gif "fft")
+![scope](https://github.com/intealls/modp/blob/master/scope.gif "scope")
+
 Currently supported backends are libopenmpt and game music emulator. Should play many files directly with playlist support (for song lengths and titles) from  \*.joshw.info.
 
 Command line options:
