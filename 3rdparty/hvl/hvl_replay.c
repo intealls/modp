@@ -791,6 +791,31 @@ struct hvl_tune *hvl_load_hvl( uint8 *buf, uint32 buflen, uint32 freq, uint32 de
   return ht;
 }
 
+struct hvl_tune *hvl_LoadData( uint8 *buf, uint32 buflen, uint32 freq, uint32 defstereo )
+{
+  if ((memcmp(buf, "THX", 3)) == 0)
+  {
+    if (buf[3] > 2)
+    {
+       printf("incorrect ahx version %i (>2)", buf[3]);
+       return NULL;
+    }
+    return hvl_load_ahx( buf, buflen, defstereo, freq );
+  }
+
+  if ((memcmp(buf, "HVL", 3)) == 0)
+  {
+    if (buf[3] > 1)
+    {
+      printf("incorrect hvl version %i (>3)", buf[3]);
+      return NULL;
+    }
+    return hvl_load_hvl( buf, buflen, freq, defstereo );
+  }
+  printf("unrecognized data");
+  return NULL;
+}
+
 struct hvl_tune *hvl_LoadTune( TEXT *name, uint32 freq, uint32 defstereo )
 {
   uint8  *buf;
@@ -826,31 +851,6 @@ struct hvl_tune *hvl_LoadTune( TEXT *name, uint32 freq, uint32 defstereo )
   fclose( fh );
 
   return hvl_LoadData( buf, buflen, freq, defstereo );
-}
-
-struct hvl_tune *hvl_LoadData( uint8 *buf, uint32 buflen, uint32 freq, uint32 defstereo )
-{
-  if ((memcmp(buf, "THX", 3)) == 0)
-  {
-    if (buf[3] > 2)
-    {
-       printf("incorrect ahx version %i (>2)", buf[3]);
-       return NULL;
-    }
-    return hvl_load_ahx( buf, buflen, defstereo, freq );
-  }
-
-  if ((memcmp(buf, "HVL", 3)) == 0)
-  {
-    if (buf[3] > 1)
-    {
-      printf("incorrect hvl version %i (>3)", buf[3]);
-      return NULL;
-    }
-    return hvl_load_hvl( buf, buflen, freq, defstereo );
-  }
-  printf("unrecognized data");
-  return NULL;
 }
 
 void hvl_FreeTune( struct hvl_tune *ht )

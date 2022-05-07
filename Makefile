@@ -41,7 +41,7 @@ directories:
 	mkdir -p $(ODIR)
 
 executable:
-	$(CC) $(CFLAGS) $(INCLUDE) src/*.c $(UI)/*.c $(LIBS) -o $(NAME)
+	$(CC) $(CFLAGS) $(INCLUDE) src/*.c $(UI)/*.c 3rdparty/hvl/*.c $(LIBS) -o $(NAME)
 
 clean:
 	rm -rf $(NAME) $(NAME)_dbg $(ODIR)
