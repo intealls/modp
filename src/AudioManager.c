@@ -8,6 +8,7 @@
 #include "AudioManager.h"
 #include "OpenMPTRenderer.h"
 #include "GMERenderer.h"
+#include "HVLRenderer.h"
 
 void
 AudioManager_PlayPause(AudioManager* am)
@@ -328,7 +329,8 @@ AudioManager_Create(int fs, int bits, int channels)
 
 	am->ars[0] = GMERenderer_Create(fs, bits, channels);
 	am->ars[1] = OpenMPTRenderer_Create(fs, bits, channels);
-	am->ars[2] = NULL;
+	am->ars[2] = HVLRenderer_Create(fs, bits, channels);
+	am->ars[3] = NULL;
 
 	am->active_ar = am->ars[0];
 
