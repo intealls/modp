@@ -52,14 +52,14 @@ HVLRenderer_Load(const AudioRenderer* obj,
 	DataObject(rndr_data, obj);
     // INIIIIIIIIIT!!!!!!!
 
-	rndr_data = hvl_LoadData(data, len, HVL_FREQ, 4);
+	rndr_data->hvl = hvl_LoadData(data, len, HVL_FREQ, 4);
 
-	if (rndr_data == NULL)
+	if (rndr_data->hvl == NULL)
 		return 1;
 
 	hvl_str = rndr_data->hvl->ht_Name;
 	source = (hvl_str != NULL && *hvl_str) ? hvl_str : filename;
-	assert(memccpy(rndr_data->hvl->ht_Name, source, '\0', MODP_STR_LENGTH) != NULL);
+	assert(memccpy(rndr_data->title, source, '\0', MODP_STR_LENGTH) != NULL);
 	return 0;
 }
 
@@ -68,22 +68,9 @@ HVLRenderer_CanLoad(const AudioRenderer* obj,
                         const unsigned char* data,
                         const size_t len)
 {
-    // duplicate the header check from hvl_replay because I can't be bothered
-	int r = 1;
-    if ((memcmp(data, "THX", 3)) == 0) {
-        if (data[3] > 2) {
-            return r;
-        }
-	r = 0;
+    if ((memcmp(data, "THX", 3)) == 0 || (memcmp(data, "HVL", 3)) == 0 ) {
+		return TRUE;
     }
-
-    if ((memcmp(data, "HVL", 3)) == 0) {
-        if (data[3] > 1) {
-            return r;
-        }
-	r = 0;
-    }
-	return r;
 }
 
 static bool
