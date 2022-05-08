@@ -1,0 +1,70 @@
+diff --git a/gme/Ay_Emu.cpp b/gme/Ay_Emu.cpp
+index b247e1f..218fc24 100644
+--- a/gme/Ay_Emu.cpp
++++ b/gme/Ay_Emu.cpp
+@@ -121,7 +121,7 @@ struct Ay_File : Gme_Info_
+ static Music_Emu* new_ay_emu () { return BLARGG_NEW Ay_Emu ; }
+ static Music_Emu* new_ay_file() { return BLARGG_NEW Ay_File; }
+ 
+-static gme_type_t_ const gme_ay_type_ = { "ZX Spectrum", 0, &new_ay_emu, &new_ay_file, "AY", 1 };
++static gme_type_t_ const gme_ay_type_ = { "ZX Spectrum", 0, &new_ay_emu, &new_ay_file, "AY", 0x03 };
+ extern gme_type_t const gme_ay_type = &gme_ay_type_;
+ 
+ // Setup
+diff --git a/gme/Gbs_Emu.cpp b/gme/Gbs_Emu.cpp
+index df96e1d..d56be22 100644
+--- a/gme/Gbs_Emu.cpp
++++ b/gme/Gbs_Emu.cpp
+@@ -100,7 +100,7 @@ struct Gbs_File : Gme_Info_
+ static Music_Emu* new_gbs_emu () { return BLARGG_NEW Gbs_Emu ; }
+ static Music_Emu* new_gbs_file() { return BLARGG_NEW Gbs_File; }
+ 
+-static gme_type_t_ const gme_gbs_type_ = { "Game Boy", 0, &new_gbs_emu, &new_gbs_file, "GBS", 1 };
++static gme_type_t_ const gme_gbs_type_ = { "Game Boy", 0, &new_gbs_emu, &new_gbs_file, "GBS", 0x03 };
+ extern gme_type_t const gme_gbs_type = &gme_gbs_type_;
+ 
+ // Setup
+diff --git a/gme/Hes_Emu.cpp b/gme/Hes_Emu.cpp
+index d0a4ffa..31097cf 100644
+--- a/gme/Hes_Emu.cpp
++++ b/gme/Hes_Emu.cpp
+@@ -136,7 +136,7 @@ struct Hes_File : Gme_Info_
+ static Music_Emu* new_hes_emu () { return BLARGG_NEW Hes_Emu ; }
+ static Music_Emu* new_hes_file() { return BLARGG_NEW Hes_File; }
+ 
+-static gme_type_t_ const gme_hes_type_ = { "PC Engine", 256, &new_hes_emu, &new_hes_file, "HES", 1 };
++static gme_type_t_ const gme_hes_type_ = { "PC Engine", 256, &new_hes_emu, &new_hes_file, "HES", 0x03 };
+ extern gme_type_t const gme_hes_type = &gme_hes_type_;
+ 
+ 
+diff --git a/gme/M3u_Playlist.cpp b/gme/M3u_Playlist.cpp
+index abff866..2150f47 100644
+--- a/gme/M3u_Playlist.cpp
++++ b/gme/M3u_Playlist.cpp
+@@ -382,10 +382,13 @@ blargg_err_t M3u_Playlist::parse_()
+ 		// find end of line and terminate it
+ 		line++;
+ 		char* begin = in;
++		bool only_white = true;
+ 		while ( *in != CR && *in != LF )
+ 		{
+ 			if ( !*in )
+ 				return "Not an m3u playlist";
++			if ( *in != ' ' )
++				only_white = false;
+ 			in++;
+ 		}
+ 		if ( in [0] == CR && in [1] == LF ) // treat CR,LF as a single line
+@@ -393,7 +396,11 @@ blargg_err_t M3u_Playlist::parse_()
+ 		*in++ = 0;
+ 		
+ 		// parse line
+-		if ( *begin == '#' )
++		if ( only_white )
++		{
++			continue;
++		}
++		else if ( *begin == '#' )
+ 		{
+ 			parse_comment( begin, info_, first_comment );
+ 			first_comment = false;

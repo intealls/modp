@@ -3,6 +3,7 @@ WARNINGS = -pedantic -Wall -Wextra -Wno-unused-function
 CFLAGS = -fno-omit-frame-pointer -O3 -march=native $(WARNINGS) -std=c11 -D_USE_MATH_DEFINES -D_DEFAULT_SOURCE
 LIBS = -lopenmpt -lgme -lportaudio -larchive
 INCLUDE = -Ideps/tinydir -I3rdparty/hvl -Isrc
+
 ODIR = bin
 NAME = $(ODIR)/modp
 UI = glui
@@ -26,6 +27,7 @@ ifeq ($(OS),Windows_NT)
 else
 	LIBS += -lSDL2
 endif
+
 
 .PHONY: directories
 
