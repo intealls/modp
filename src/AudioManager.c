@@ -324,7 +324,7 @@ AudioManager_Create(int fs, int bits, int channels)
 
 	PortAudio_Init(am);
 
-	am->ars = (AudioRenderer**) calloc(3, sizeof(AudioRenderer*));
+	am->ars = (AudioRenderer**) calloc(4, sizeof(AudioRenderer*));
 	assert(am->ars);
 
 	am->ars[0] = GMERenderer_Create(fs, bits, channels);
