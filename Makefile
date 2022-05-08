@@ -33,7 +33,7 @@ all: release
 
 release: directories executable
 
-debug: CFLAGS = -g3 -O0 $(WARNINGS)
+debug: CFLAGS = -g3 -O0 $(WARNINGS) -fsanitize=address
 debug: NAME := $(NAME)_dbg
 debug: directories executable
 

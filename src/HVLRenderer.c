@@ -12,7 +12,6 @@
 #define HVL_FREQ 48000
 #define HIVELY_LEN HVL_FREQ/50
 
-struct hvl_tune *tune;
 size_t hivelyIndex;
 int16 hivelyLeft[HIVELY_LEN], hivelyRight[HIVELY_LEN];
 
@@ -50,8 +49,6 @@ HVLRenderer_Load(const AudioRenderer* obj,
 	const char* source;
 
 	DataObject(rndr_data, obj);
-    // INIIIIIIIIIT!!!!!!!
-
 	rndr_data->hvl = hvl_LoadData(data, len, HVL_FREQ, 4);
 
 	if (rndr_data->hvl == NULL)
@@ -103,20 +100,41 @@ HVLRenderer_Render(const AudioRenderer* obj,
                     const size_t len)
 {
 	DataObject(rndr_data, obj);
+	/* -- 8< -- 8< --
 	size_t byte_scale = (rndr_data->bits / 8) * rndr_data->channels;
 	size_t rendered = 0;
 	size_t to_render = len / byte_scale;
+	*/
+    int16 *out;
+    int i;
+	int length;
+	size_t streamPos = 0;
+	length = len >> 1;
+	out = (int16*) buf;
 
-	while (rendered < to_render) {
-		hvl_DecodeFrame(rndr_data->hvl, (int8 *) hivelyLeft, (int8 *) hivelyRight, 2 );
-		rendered++;
+	if (rndr_data->hvl) {
+		// Mix to 16bit interleaved stereo
+		out = (int16*) buf;
+		// Flush remains of previous frame
+		for(i = hivelyIndex; i < (HIVELY_LEN); i++) {
+			out[streamPos++] = hivelyLeft[i];
+			out[streamPos++] = hivelyRight[i];
+		}
+
+		while(streamPos < length) {
+			hvl_DecodeFrame( rndr_data->hvl, (int8 *) hivelyLeft, (int8 *) hivelyRight, 2 );
+			for(i = 0; i < (HIVELY_LEN) && streamPos < length; i++) {
+				out[streamPos++] = hivelyLeft[i];
+				out[streamPos++] = hivelyRight[i];
+			}
+		}
+		hivelyIndex = i;
 	}
 
-	assert(((int) rendered - to_render) == 0);
+	// assert(((int) rndr_data->hvl->ht_SongEndReached) == 0); // conditional for SongEndReached should go elsewhere
+	rndr_data->total_frames_rendered += streamPos; // not sure this is correct
 
-	rndr_data->total_frames_rendered += rendered;
-
-	return rendered;
+	return streamPos;
 }
 
 static const char*

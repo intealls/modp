@@ -567,7 +567,8 @@ struct hvl_tune *hvl_load_ahx( uint8 *buf, uint32 buflen, uint32 defstereo, uint
   }
 
   hvl_InitSubsong( ht, 0 );
-  free( buf );
+  // let caller worry about clearing buffers
+  // free( buf );
   return ht;
 }
 
@@ -787,7 +788,8 @@ struct hvl_tune *hvl_load_hvl( uint8 *buf, uint32 buflen, uint32 freq, uint32 de
   }
 
   hvl_InitSubsong( ht, 0 );
-  free( buf );
+  // caller should clear any buffers
+  // free( buf );
   return ht;
 }
 
