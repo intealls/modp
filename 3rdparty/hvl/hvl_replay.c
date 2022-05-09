@@ -399,7 +399,7 @@ struct hvl_tune *hvl_load_ahx( uint8 *buf, uint32 buflen, uint32 defstereo, uint
   ht = malloc( hs );
   if( !ht )
   {
-    free( buf );
+    //free( buf );
     printf( "Out of memory!\n" );
     return NULL;
   }
@@ -441,7 +441,7 @@ struct hvl_tune *hvl_load_ahx( uint8 *buf, uint32 buflen, uint32 defstereo, uint
                           ht->ht_TrackLength,
                           ht->ht_InstrumentNr );
     free( ht );
-    free( buf );
+    //free( buf );
     printf( "Invalid file.\n" );
     return NULL;
   }
@@ -622,7 +622,7 @@ struct hvl_tune *hvl_load_hvl( uint8 *buf, uint32 buflen, uint32 freq, uint32 de
   ht = malloc( hs );
   if( !ht )
   {
-    free( buf );
+    //free( buf );
     printf( "Out of memory!\n" );
     return NULL;
   }
@@ -665,7 +665,7 @@ struct hvl_tune *hvl_load_hvl( uint8 *buf, uint32 buflen, uint32 freq, uint32 de
                           ht->ht_TrackLength,
                           ht->ht_InstrumentNr );
     free( ht );
-    free( buf );
+    //free( buf );
     printf( "Invalid file.\n" );
     return NULL;
   }

@@ -12,11 +12,11 @@
 #define HVL_FREQ 48000
 #define HIVELY_LEN HVL_FREQ/50
 
-size_t hivelyIndex;
-int16 hivelyLeft[HIVELY_LEN], hivelyRight[HIVELY_LEN];
-
 typedef struct HVLRenderer_Data {
-    struct hvl_tune* hvl;
+	struct hvl_tune* hvl;
+	size_t hivelyIndex;
+	int16 hivelyLeft[HIVELY_LEN];
+	int16 hivelyRight[HIVELY_LEN];
 	char title[MODP_STR_LENGTH];
 	char info[MODP_STR_LENGTH];
 	_Atomic size_t total_frames_rendered;
@@ -41,14 +41,15 @@ HVLRenderer_LogFunc(const char* message, void* userdata)
 
 static int
 HVLRenderer_Load(const AudioRenderer* obj,
-                     const char* filename,
-                     const void* data,
-                     const size_t len)
+                 const char* filename,
+                 const void* data,
+                 const size_t len)
 {
-	const char* hvl_str;
-	const char* source;
+	const char* hvl_str = NULL;
+	const char* source = NULL;
 
 	DataObject(rndr_data, obj);
+
 	rndr_data->hvl = hvl_LoadData(data, len, HVL_FREQ, 4);
 
 	if (rndr_data->hvl == NULL)
@@ -57,17 +58,21 @@ HVLRenderer_Load(const AudioRenderer* obj,
 	hvl_str = rndr_data->hvl->ht_Name;
 	source = (hvl_str != NULL && *hvl_str) ? hvl_str : filename;
 	assert(memccpy(rndr_data->title, source, '\0', MODP_STR_LENGTH) != NULL);
+
 	return 0;
 }
 
 static bool
 HVLRenderer_CanLoad(const AudioRenderer* obj,
-                        const unsigned char* data,
-                        const size_t len)
+                    const void* data,
+                    const size_t len)
 {
-    if ((memcmp(data, "THX", 3)) == 0 || (memcmp(data, "HVL", 3)) == 0 ) {
-		return TRUE;
-    }
+	(void) obj;
+
+	if (len > 2 && (!memcmp(data, "THX", 3) || !memcmp(data, "HVL", 3)))
+		return true;
+
+	return false;
 }
 
 static bool
@@ -91,13 +96,13 @@ HVLRenderer_UnLoad(const AudioRenderer* obj)
 
 	rndr_data->hvl = NULL;
 	rndr_data->title[0] = '\0';
-	rndr_data->current_track = rndr_data->track_length = -1;
+	rndr_data->total_frames_rendered = 0;
 }
 
 static int
 HVLRenderer_Render(const AudioRenderer* obj,
-                    void* buf,
-                    const size_t len)
+                   void* buf,
+                   const size_t len)
 {
 	DataObject(rndr_data, obj);
 	/* -- 8< -- 8< --
@@ -115,24 +120,29 @@ HVLRenderer_Render(const AudioRenderer* obj,
 	if (rndr_data->hvl) {
 		// Mix to 16bit interleaved stereo
 		out = (int16*) buf;
+
 		// Flush remains of previous frame
-		for(i = hivelyIndex; i < (HIVELY_LEN); i++) {
-			out[streamPos++] = hivelyLeft[i];
-			out[streamPos++] = hivelyRight[i];
+		for (i = rndr_data->hivelyIndex; i < (HIVELY_LEN); i++) {
+			out[streamPos++] = rndr_data->hivelyLeft[i];
+			out[streamPos++] = rndr_data->hivelyRight[i];
 		}
 
-		while(streamPos < length) {
-			hvl_DecodeFrame( rndr_data->hvl, (int8 *) hivelyLeft, (int8 *) hivelyRight, 2 );
-			for(i = 0; i < (HIVELY_LEN) && streamPos < length; i++) {
-				out[streamPos++] = hivelyLeft[i];
-				out[streamPos++] = hivelyRight[i];
+		while (streamPos < length) {
+			hvl_DecodeFrame(rndr_data->hvl,
+			                (int8*) rndr_data->hivelyLeft,
+			                (int8*) rndr_data->hivelyRight,
+			                2);
+
+			for (i = 0; i < (HIVELY_LEN) && streamPos < length; i++) {
+				out[streamPos++] = rndr_data->hivelyLeft[i];
+				out[streamPos++] = rndr_data->hivelyRight[i];
 			}
 		}
-		hivelyIndex = i;
+		rndr_data->hivelyIndex = i;
 	}
 
 	// assert(((int) rndr_data->hvl->ht_SongEndReached) == 0); // conditional for SongEndReached should go elsewhere
-	rndr_data->total_frames_rendered += streamPos; // not sure this is correct
+	rndr_data->total_frames_rendered += streamPos / 2; // not sure this is correct
 
 	return streamPos;
 }
@@ -173,7 +183,7 @@ HVLRenderer_Length(const AudioRenderer* obj)
 	DataObject(rndr_data, obj);
 
 	if (rndr_data->hvl)
-		return (int) rndr_data->hvl->ht_PlayingTime;
+		return (int) rndr_data->hvl->ht_TrackLength;
 	else
 		return 0;
 }

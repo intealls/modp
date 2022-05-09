@@ -293,7 +293,7 @@ Player_Init(int fs, int bits, int channels,
 	ps->am = AudioManager_Create(fs, bits, channels);
 	ps->dir = LocalDir_Create(path);
 
-	ps->last_input = SDL_GetTicks64();
+	ps->last_input = SDL_GetTicks();
 	// TODO: probably not random enough
 	srand(ps->last_input);
 
