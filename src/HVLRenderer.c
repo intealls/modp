@@ -97,6 +97,8 @@ HVLRenderer_UnLoad(const AudioRenderer* obj)
 	rndr_data->hvl = NULL;
 	rndr_data->title[0] = '\0';
 	rndr_data->total_frames_rendered = 0;
+	rndr_data->hivelyIndex = 0;
+	rndr_data->track_length = -1;
 }
 
 static int
@@ -133,6 +135,9 @@ HVLRenderer_Render(const AudioRenderer* obj,
 			                (int8*) rndr_data->hivelyRight,
 			                2);
 
+			if (rndr_data->hvl->ht_SongEndReached && rndr_data->track_length == -1)
+				rndr_data->track_length = rndr_data->total_frames_rendered;
+
 			for (i = 0; i < (HIVELY_LEN) && streamPos < length; i++) {
 				out[streamPos++] = rndr_data->hivelyLeft[i];
 				out[streamPos++] = rndr_data->hivelyRight[i];
@@ -141,7 +146,6 @@ HVLRenderer_Render(const AudioRenderer* obj,
 		rndr_data->hivelyIndex = i;
 	}
 
-	// assert(((int) rndr_data->hvl->ht_SongEndReached) == 0); // conditional for SongEndReached should go elsewhere
 	rndr_data->total_frames_rendered += streamPos / 2; // not sure this is correct
 
 	return streamPos;
@@ -182,10 +186,14 @@ HVLRenderer_Length(const AudioRenderer* obj)
 {
 	DataObject(rndr_data, obj);
 
-	if (rndr_data->hvl)
-		return (int) rndr_data->hvl->ht_TrackLength;
-	else
-		return 0;
+	if (rndr_data->hvl) {
+		if (rndr_data->track_length < 0)
+			return (int) rndr_data->total_frames_rendered / rndr_data->fs + 1;
+		else
+			return (int) rndr_data->track_length / rndr_data->fs;
+	}
+
+	return 0;
 }
 
 static void
@@ -236,7 +244,7 @@ HVLRenderer_Create(int fs, int bits, int channels)
 {
 	AudioRenderer* arndr;
 	HVLRenderer_Data* rndr_data;
-    hvl_InitReplayer();
+	hvl_InitReplayer();
 	static AudioRenderer_VTable _vtable;
 	static bool _initialized = false;
 
@@ -270,7 +278,6 @@ HVLRenderer_Create(int fs, int bits, int channels)
 	rndr_data->bits = bits;
 	rndr_data->channels = channels;
 
-	rndr_data->hvl = NULL;
 	rndr_data->current_track = -1;
 	rndr_data->track_length = -1;
 
