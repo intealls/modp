@@ -937,9 +937,9 @@ void hvl_process_stepfx_2( struct hvl_tune *ht, struct hvl_voice *voice, int32 F
       voice->vc_IgnoreSquare = 1;
       break;
 
-    case 0x5: // Tone portamento + volume slide
     case 0x3: // Tone portamento
       if( FXParam != 0 ) voice->vc_PeriodSlideSpeed = FXParam;
+    case 0x5: // Tone portamento + volume slide
 
       if( *Note )
       {
@@ -1625,8 +1625,7 @@ void hvl_process_frame( struct hvl_tune *ht, struct hvl_voice *voice )
     }
 
     // NoFilterInit
-    FMax = (voice->vc_FilterSpeed < 3) ? (5-voice->vc_FilterSpeed) : 1;
-
+    FMax = (voice->vc_FilterSpeed < 4) ? (5-voice->vc_FilterSpeed) : 1;
     for( i=0; i<FMax; i++ )
     {
       if( ( d1 == d3 ) || ( d2 == d3 ) )
