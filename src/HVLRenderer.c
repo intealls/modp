@@ -47,6 +47,7 @@ HVLRenderer_Load(const AudioRenderer* obj,
 {
 	const char* hvl_str = NULL;
 	const char* source = NULL;
+	int i;
 
 	DataObject(rndr_data, obj);
 
@@ -57,6 +58,14 @@ HVLRenderer_Load(const AudioRenderer* obj,
 
 	hvl_str = rndr_data->hvl->ht_Name;
 	source = (hvl_str != NULL && *hvl_str) ? hvl_str : filename;
+	for (i=1; i <= rndr_data->hvl->ht_InstrumentNr; i++) {
+		strcat(rndr_data->info, rndr_data->hvl->ht_Instruments[i].ins_Name);
+		if (i < rndr_data->hvl->ht_InstrumentNr) {
+			strcat(rndr_data->info, "\n");
+		}
+	}
+	strcat(rndr_data->info, "\0");
+
 	assert(memccpy(rndr_data->title, source, '\0', MODP_STR_LENGTH) != NULL);
 
 	return 0;
