@@ -104,10 +104,12 @@ HVLRenderer_UnLoad(const AudioRenderer* obj)
 		hvl_FreeTune(rndr_data->hvl);
 
 	rndr_data->hvl = NULL;
+	rndr_data->info[0] = '\0';
 	rndr_data->title[0] = '\0';
 	rndr_data->total_frames_rendered = 0;
 	rndr_data->hivelyIndex = 0;
 	rndr_data->track_length = -1;
+	
 }
 
 static int
