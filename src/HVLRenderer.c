@@ -45,9 +45,13 @@ HVLRenderer_Load(const AudioRenderer* obj,
                  const void* data,
                  const size_t len)
 {
-	const char* hvl_str = NULL;
-	const char* source = NULL;
-	int i;
+    const char* hvl_str = NULL;
+    const char* source = NULL;
+    int i;
+    int8 b1[8][(HVL_FREQ*2*2)/50];
+    int8 b2[8][(HVL_FREQ*2*2)/50];
+    size_t frames_total = 0;
+    int nb = 0;
 
 	DataObject(rndr_data, obj);
 
@@ -63,11 +67,20 @@ HVLRenderer_Load(const AudioRenderer* obj,
 		if (i < rndr_data->hvl->ht_InstrumentNr) {
 			strcat(rndr_data->info, "\n");
 		}
-	}
-	strcat(rndr_data->info, "\0");
+	};
 
+	strcat(rndr_data->info, "\0");
 	assert(memccpy(rndr_data->title, source, '\0', MODP_STR_LENGTH) != NULL);
 
+	/* inelegantly get the song length,
+       this should probably be part of hvl_replay instead
+    */
+	while(!rndr_data->hvl->ht_SongEndReached) {
+        hvl_DecodeFrame(rndr_data->hvl, (int8*) b1[nb], (int8*) b2[nb]+2, 2);
+        frames_total += HIVELY_LEN;
+        nb = (nb+1)%8;
+    }
+	rndr_data->track_length = frames_total;
 	return 0;
 }
 
@@ -109,7 +122,7 @@ HVLRenderer_UnLoad(const AudioRenderer* obj)
 	rndr_data->total_frames_rendered = 0;
 	rndr_data->hivelyIndex = 0;
 	rndr_data->track_length = -1;
-	
+
 }
 
 static int
@@ -131,9 +144,6 @@ HVLRenderer_Render(const AudioRenderer* obj,
 	out = (int16*) buf;
 
 	if (rndr_data->hvl) {
-		// Mix to 16bit interleaved stereo
-		out = (int16*) buf;
-
 		// Flush remains of previous frame
 		for (i = rndr_data->hivelyIndex; i < (HIVELY_LEN); i++) {
 			out[streamPos++] = rndr_data->hivelyLeft[i];
