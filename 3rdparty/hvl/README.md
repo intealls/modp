@@ -2,33 +2,27 @@
 Based on the [HivelyTracker](https://github.com/pete-gordon/hivelytracker/) hvl_replayer code. Some modifications where made and some stuff left out.
 
 ## AHX-module format (formerly THX module format).
-from ahxformat.txt
+from [ahxformat.txt](http://lclevy.free.fr/exotica/ahx/ahxformat.txt)
+
 Format description by Stuart Caie aka Kyzer/CSG (kyzer@4u.net)
 Version : 15 march 2000
 
 Authorized publishing by Dexter/Abyss (Dexter.Abyss@iName.com), but with no warranty
 of correctness, by request of lclevy@club-internet.fr.
 
-Please contact Dexter/Abyss and Kyzer if any code based on this file is written .
-Dexter and Bartman player code source might become public soon.
-The name THX, THX Sound System and the THX logo are the property of
-Lucasfilm, and were stolen by Abyss for their player. Due to legalities,
-the player has been renamed AHX, and all references to the Abyss music
-system must be termed "AHX".
+Please contact Dexter/Abyss and Kyzer if any code based on this file is written. Dexter and Bartman player code source might become public soon. The name THX, THX Sound System and the THX logo are the property of Lucasfilm, and were stolen by Abyss for their player. 
+Due to legalities, the player has been renamed AHX, and all references to the Abyss music system must be termed "AHX".
+That said, all current and previous AHX modules begin with the letters:
+"T", "H" and "X". 
 
-That said, all current and previous AHX modules begin with the letters "T",
-"H" and "X". 
-
-This document describes the AHX0 and AHX1 format, no later version of AHX
-is guaranteed to follow this format. This information may be made invalid
-or outdated at any time without warning.
+This document describes the AHX0 and AHX1 format, no later version of AHX is guaranteed to follow this format. This information may be made invalid or outdated at any time without warning.
 
 All multiple-byte data elements are stored in big-endian (Motorola) format.
 For example, a 32-bit long is composed like this:
-address + 0 = bits 31-24
-address + 1 = bits 23-16
-address + 2 = bits 15-8
-address + 3 = bits 7-0
+* address + 0 = bits 31-24
+* address + 1 = bits 23-16
+* address + 2 = bits 15-8
+* address + 3 = bits 7-0
 
 ### Overview of AHX format
 [Header: 14 bytes]
@@ -85,8 +79,7 @@ Commands $1,$2,$3,$5,$8,$A and $F may have data of any value.
 
 ##### FOR AHX0
 As above, except:
-Command $4 is not valid at all.
-Valid range for $D command is $0 alone.
+Command $4 is not valid at all. Valid range for $D command is $0 alone.
 
 #### Sample format
 There are SMP samples, grouped together (0 samples is also valid)
@@ -138,7 +131,7 @@ byte 21: playlist length ("PLEN") which ranges from 0 to 255. If length is
 ##### PLEN entries
 Now follows the playlist: PLEN entries, grouped together (0 is also valid)
 Each entry is 4 bytes (32 bits) long.
-
+```
 bits 31-29 (3 bits) = FX2 command (0-7)
 bits 28-26 (3 bits) = FX1 command (0-7)
 bits 25-23 (3 bits) = the waveform. 0=hold previous, 1=triangle,
@@ -147,7 +140,7 @@ bit  22    (1 bit)  = fix note? 1=note fixed, 0=note varies
 bits 21-16 (6 bits) = the note data from 0 (no note) to 60 (B-5)
 bits 15-8  (8 bits) = the data for FX1
 bits 7-0   (8 bits) = the data for FX2
-
+```
 
 |Playlist FX Command|Description|
 |-------------------|-----------|
@@ -162,4 +155,5 @@ bits 7-0   (8 bits) = the data for FX2
 
 #### Names format
 The names section is last, and is a group of SMP+1 null-terminated strings grouped together. The first string is the songtitle and should also be a valid filename (consists only of byte values 0,[32-126],[128-255]). The rest are sample names, and may be simply null strings (ie only one byte long, the null terminator.)
+
 Love, Kyzer
