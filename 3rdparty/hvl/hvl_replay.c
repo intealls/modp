@@ -365,11 +365,11 @@ void hvl_InitReplayer( void )
 struct hvl_tune *hvl_load_ahx( const uint8 *buf, uint32 buflen, uint32 defstereo, uint32 freq )
 {
   const uint8  *bptr;
-  TEXT   *nptr;
+  const TEXT   *nptr;
   uint32  i, j, k, l, posn, insn, ssn, hs, trkn, trkl;
   struct hvl_tune *ht;
-  struct  hvl_plsentry *ple;
-  int32 defgain[] = { 71, 72, 76, 85, 100 };
+  struct hvl_plsentry *ple;
+  const int32 defgain[] = { 71, 72, 76, 85, 100 };
 
   posn = ((buf[6]&0x0f)<<8)|buf[7];
   insn = buf[12];
@@ -574,11 +574,11 @@ struct hvl_tune *hvl_load_ahx( const uint8 *buf, uint32 buflen, uint32 defstereo
 
 struct hvl_tune *hvl_load_hvl( const uint8 *buf, uint32 buflen, uint32 freq, uint32 defstereo )
 {
-  struct hvl_tune *ht;
   const uint8  *bptr;
-  TEXT   *nptr;
+  const TEXT   *nptr;
   uint32  i, j, posn, insn, ssn, chnn, hs, trkl, trkn;
-  struct  hvl_plsentry *ple;
+  struct hvl_tune *ht;
+  struct hvl_plsentry *ple;
 
   posn = ((buf[6]&0x0f)<<8)|buf[7];
   insn = buf[12];
@@ -818,7 +818,7 @@ struct hvl_tune *hvl_LoadData( const uint8 *buf, uint32 buflen, uint32 freq, uin
   return NULL;
 }
 
-struct hvl_tune *hvl_LoadTune( TEXT *name, uint32 freq, uint32 defstereo )
+struct hvl_tune *hvl_LoadTune( const TEXT *name, uint32 freq, uint32 defstereo )
 {
   uint8  *buf;
   uint32  buflen;
@@ -1013,12 +1013,12 @@ void hvl_process_stepfx_3( struct hvl_tune *ht, struct hvl_voice *voice, int32 F
       switch( FXParam >> 4 )
       {
         case 0x1: // Fineslide up
-          voice->vc_PeriodSlidePeriod = -(FXParam & 0x0f);
+          voice->vc_PeriodSlidePeriod -= (FXParam & 0x0f); // 1.8
           voice->vc_PlantPeriod = 1;
           break;
 
         case 0x2: // Fineslide down
-          voice->vc_PeriodSlidePeriod = (FXParam & 0x0f);
+          voice->vc_PeriodSlidePeriod += (FXParam & 0x0f); // 1.8
           voice->vc_PlantPeriod = 1;
           break;
 
@@ -1136,12 +1136,12 @@ void hvl_process_step( struct hvl_tune *ht, struct hvl_voice *voice )
     voice->vc_SamplePos        = 0;
 
     voice->vc_ADSR.aFrames     = Ins->ins_Envelope.aFrames;
-    voice->vc_ADSR.aVolume     = Ins->ins_Envelope.aVolume*256/voice->vc_ADSR.aFrames;
+	voice->vc_ADSR.aVolume     = voice->vc_ADSR.aFrames ? Ins->ins_Envelope.aVolume*256/voice->vc_ADSR.aFrames : Ins->ins_Envelope.aVolume * 256; // XXX
     voice->vc_ADSR.dFrames     = Ins->ins_Envelope.dFrames;
-    voice->vc_ADSR.dVolume     = (Ins->ins_Envelope.dVolume-Ins->ins_Envelope.aVolume)*256/voice->vc_ADSR.dFrames;
+	voice->vc_ADSR.dVolume     = voice->vc_ADSR.dFrames ? (Ins->ins_Envelope.dVolume-Ins->ins_Envelope.aVolume)*256/voice->vc_ADSR.dFrames : Ins->ins_Envelope.dVolume * 256; // XXX
     voice->vc_ADSR.sFrames     = Ins->ins_Envelope.sFrames;
     voice->vc_ADSR.rFrames     = Ins->ins_Envelope.rFrames;
-    voice->vc_ADSR.rVolume     = (Ins->ins_Envelope.rVolume-Ins->ins_Envelope.dVolume)*256/voice->vc_ADSR.rFrames;
+	voice->vc_ADSR.rVolume     = voice->vc_ADSR.rFrames ? (Ins->ins_Envelope.rVolume-Ins->ins_Envelope.dVolume)*256/voice->vc_ADSR.rFrames : Ins->ins_Envelope.rVolume * 256; // XXX
 
     voice->vc_WaveLength       = Ins->ins_WaveLength;
     voice->vc_NoteMaxVolume    = Ins->ins_Volume;
@@ -1367,7 +1367,7 @@ void hvl_plist_command_parse( struct hvl_tune *ht, struct hvl_voice *voice, int3
 
 void hvl_process_frame( struct hvl_tune *ht, struct hvl_voice *voice )
 {
-  static uint8 Offsets[] = {0x00,0x04,0x04+0x08,0x04+0x08+0x10,0x04+0x08+0x10+0x20,0x04+0x08+0x10+0x20+0x40};
+  static const uint8 Offsets[] = {0x00,0x04,0x04+0x08,0x04+0x08+0x10,0x04+0x08+0x10+0x20,0x04+0x08+0x10+0x20+0x40};
 
   if( voice->vc_TrackOn == 0 )
     return;
@@ -1653,7 +1653,7 @@ void hvl_process_frame( struct hvl_tune *ht, struct hvl_voice *voice )
     // CalcSquare
     uint32  i;
     int32   Delta;
-    int8   *SquarePtr;
+    const int8   *SquarePtr;
     int32  X;
 
     SquarePtr = &waves[WO_SQUARES+(voice->vc_FilterPos-0x20)*(0xfc+0xfc+0x80*0x1f+0x80+0x280*3)];
@@ -1688,7 +1688,7 @@ void hvl_process_frame( struct hvl_tune *ht, struct hvl_voice *voice )
 
   if( voice->vc_RingNewWaveform )
   {
-    int8 *rasrc;
+    const int8 *rasrc;
 
     if( voice->vc_RingWaveform > 1 ) voice->vc_RingWaveform = 1;
 
@@ -1820,7 +1820,7 @@ void hvl_set_audio( struct hvl_voice *voice, float64 freqf )
 
   if( voice->vc_NewWaveform )
   {
-    int8 *src;
+    const int8 *src;
 
     src = voice->vc_AudioSource;
 
@@ -1857,7 +1857,7 @@ void hvl_set_audio( struct hvl_voice *voice, float64 freqf )
 
   if( voice->vc_RingNewWaveform )
   {
-    int8 *src;
+    const int8 *src;
     uint32 i, WaveLoops;
 
     src = voice->vc_RingAudioSource;
@@ -1938,8 +1938,8 @@ void hvl_play_irq( struct hvl_tune *ht )
 
 void hvl_mixchunk( struct hvl_tune *ht, uint32 samples, int8 *buf1, int8 *buf2, int32 bufmod )
 {
-  int8   *src[MAX_CHANNELS];
-  int8   *rsrc[MAX_CHANNELS];
+  const int8   *src[MAX_CHANNELS];
+  const int8   *rsrc[MAX_CHANNELS];
   uint32  delta[MAX_CHANNELS];
   uint32  rdelta[MAX_CHANNELS];
   int32   vol[MAX_CHANNELS];
@@ -2050,8 +2050,8 @@ void hvl_DecodeFrame( struct hvl_tune *ht, int8 *buf1, int8 *buf2, int32 bufmod 
   {
     hvl_play_irq( ht );
     hvl_mixchunk( ht, samples, buf1, buf2, bufmod );
-    buf1 += samples * 4;
-    buf2 += samples * 4;
+    buf1 += samples * bufmod;
+    buf2 += samples * bufmod;
     loops--;
   } while( loops );
 }
