@@ -102,7 +102,7 @@ void hvl_GenSawtooth( int8 *buf, uint32 len )
 
 void hvl_GenTriangle( int8 *buf, uint32 len )
 {
-  uint32 i;
+  int32  i;
   int32  d2, d5, d1, d4;
   int32  val;
   int8   *buf2;
@@ -362,9 +362,9 @@ void hvl_InitReplayer( void )
   hvl_GenFilterWaves( &waves[WO_TRIANGLE_04], &waves[WO_LOWPASSES], &waves[WO_HIGHPASSES] );
 }
 
-struct hvl_tune *hvl_load_ahx( uint8 *buf, uint32 buflen, uint32 defstereo, uint32 freq )
+struct hvl_tune *hvl_load_ahx( const uint8 *buf, uint32 buflen, uint32 defstereo, uint32 freq )
 {
-  uint8  *bptr;
+  const uint8  *bptr;
   TEXT   *nptr;
   uint32  i, j, k, l, posn, insn, ssn, hs, trkn, trkl;
   struct hvl_tune *ht;
@@ -572,10 +572,10 @@ struct hvl_tune *hvl_load_ahx( uint8 *buf, uint32 buflen, uint32 defstereo, uint
   return ht;
 }
 
-struct hvl_tune *hvl_load_hvl( uint8 *buf, uint32 buflen, uint32 freq, uint32 defstereo )
+struct hvl_tune *hvl_load_hvl( const uint8 *buf, uint32 buflen, uint32 freq, uint32 defstereo )
 {
   struct hvl_tune *ht;
-  uint8  *bptr;
+  const uint8  *bptr;
   TEXT   *nptr;
   uint32  i, j, posn, insn, ssn, chnn, hs, trkl, trkn;
   struct  hvl_plsentry *ple;
@@ -793,7 +793,7 @@ struct hvl_tune *hvl_load_hvl( uint8 *buf, uint32 buflen, uint32 freq, uint32 de
   return ht;
 }
 
-struct hvl_tune *hvl_LoadData( uint8 *buf, uint32 buflen, uint32 freq, uint32 defstereo )
+struct hvl_tune *hvl_LoadData( const uint8 *buf, uint32 buflen, uint32 freq, uint32 defstereo )
 {
   if ((memcmp(buf, "THX", 3)) == 0)
   {

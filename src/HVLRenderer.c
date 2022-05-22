@@ -131,14 +131,9 @@ HVLRenderer_Render(const AudioRenderer* obj,
                    const size_t len)
 {
 	DataObject(rndr_data, obj);
-	/* -- 8< -- 8< --
-	size_t byte_scale = (rndr_data->bits / 8) * rndr_data->channels;
-	size_t rendered = 0;
-	size_t to_render = len / byte_scale;
-	*/
     int16 *out;
     int i;
-	int length;
+	size_t length;
 	size_t streamPos = 0;
 	length = len >> 1;
 	out = (int16*) buf;
