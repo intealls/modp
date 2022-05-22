@@ -1,14 +1,10 @@
-# AHX/HVL
-Based on the [HivelyTracker](https://github.com/pete-gordon/hivelytracker/) hvl_replayer code. Some modifications where made and some stuff left out.
-
-## AHX-module format (formerly THX module format).
-from [ahxformat.txt](http://lclevy.free.fr/exotica/ahx/ahxformat.txt)
-
+# AHX and HVL
+Based on the [HivelyTracker](https://github.com/pete-gordon/hivelytracker/) hvl_replayer code. Some modifications where made and some stuff left out. Below description of the AHX format was extracted from [ahxformat.txt](http://lclevy.free.fr/exotica/ahx/ahxformat.txt)
+## AHX-module format (formerly THX module format)
 Format description by Stuart Caie aka Kyzer/CSG (kyzer@4u.net)
 Version : 15 march 2000
 
-Authorized publishing by Dexter/Abyss (Dexter.Abyss@iName.com), but with no warranty
-of correctness, by request of lclevy@club-internet.fr.
+Authorized publishing by Dexter/Abyss (Dexter.Abyss@iName.com), but with no warranty of correctness, by request of lclevy@club-internet.fr.
 
 Please contact Dexter/Abyss and Kyzer if any code based on this file is written. Dexter and Bartman player code source might become public soon. The name THX, THX Sound System and the THX logo are the property of Lucasfilm, and were stolen by Abyss for their player. 
 Due to legalities, the player has been renamed AHX, and all references to the Abyss music system must be termed "AHX".
@@ -25,13 +21,14 @@ For example, a 32-bit long is composed like this:
 * address + 3 = bits 7-0
 
 ### Overview of AHX format
-[Header: 14 bytes]
-[Subsong list: SS*2 bytes]
-[Position list: LEN*8 bytes]
-[Tracks: (TRK+1)*TRL*3 bytes]
-[Samples: SMP entries, each one individually sized]
-[Names: SMP+1 entries, each one individually sized]
-
+```
+Header: 14 bytes
+Subsong list: SS*2 bytes
+Position list: LEN*8 bytes
+Tracks: (TRK+1)*TRL*3 bytes
+Samples: SMP entries, each one individually sized
+Names: SMP+1 entries, each one individually sized
+```
 #### Header format
 |Type|Byte(s)|Description|
 |----|-------|-----------|
@@ -129,8 +126,7 @@ byte 21: playlist length ("PLEN") which ranges from 0 to 255. If length is
          not count.
 ```
 ##### PLEN entries
-Now follows the playlist: PLEN entries, grouped together (0 is also valid)
-Each entry is 4 bytes (32 bits) long.
+Now follows the playlist: PLEN entries, grouped together (0 is also valid). Each entry is 4 bytes (32 bits) long.
 ```
 bits 31-29 (3 bits) = FX2 command (0-7)
 bits 28-26 (3 bits) = FX1 command (0-7)
