@@ -61,9 +61,9 @@ LocalDir_StrCpy(char dest[_TINYDIR_PATH_MAX],
 }
 
 static int
-LocalDir_Append(char dest[_TINYDIR_PATH_MAX],
+LocalDir_Append(char* dest,
                 int offset,
-                const char src[_TINYDIR_PATH_MAX])
+                const char* src)
 {
 	int r = snprintf(dest + offset,
 	                 _TINYDIR_PATH_MAX - offset,

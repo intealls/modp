@@ -198,9 +198,14 @@ FreeM3UEntries(M3UEntries* ents)
 
 static bool
 HasExtension(const char* name,
-             const char ext_cmp[_TINYDIR_PATH_MAX])
+             const char* ext_cmp)
 {
-	char* p = strrchr(name, '.');
+	char* p;
+
+	if (name == NULL || ext_cmp == NULL)
+		return false;
+
+	p = strrchr(name, '.');
 
 	if (p == NULL)
 		return false;

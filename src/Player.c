@@ -12,6 +12,7 @@
 #include "LocalDir.h"
 #include "AudioManager.h"
 #include "OpenMPTRenderer.h"
+#include "HVLRenderer.h"
 
 int
 Player_Perform(Player_State* ps)

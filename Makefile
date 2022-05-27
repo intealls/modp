@@ -1,8 +1,9 @@
 CC = gcc
-WARNINGS = -pedantic -Wall -Wextra -Wno-unused-function
+WARNINGS = -pedantic -Wall -Wextra -Wno-unused-function -Wno-overlength-strings
 CFLAGS = -fno-omit-frame-pointer -O3 -march=native $(WARNINGS) -std=c11 -D_USE_MATH_DEFINES -D_DEFAULT_SOURCE
 LIBS = -lopenmpt -lgme -lportaudio -larchive
-INCLUDE = -Ideps/tinydir -Isrc
+INCLUDE = -Ideps/tinydir -I3rdparty/hvl -Isrc
+
 ODIR = bin
 NAME = $(ODIR)/modp
 UI = glui
@@ -34,7 +35,7 @@ all: release
 
 release: directories executable
 
-debug: CFLAGS = -g3 -O0 $(WARNINGS)
+debug: CFLAGS = -g3 -O0 $(WARNINGS) -fsanitize=address
 debug: NAME := $(NAME)_dbg
 debug: directories executable
 
@@ -42,7 +43,7 @@ directories:
 	mkdir -p $(ODIR)
 
 executable:
-	$(CC) $(CFLAGS) $(INCLUDE) src/*.c $(UI)/*.c $(LIBS) -o $(NAME)
+	$(CC) $(CFLAGS) $(INCLUDE) src/*.c $(UI)/*.c 3rdparty/hvl/*.c $(LIBS) -o $(NAME)
 
 clean:
 	rm -rf $(NAME) $(NAME)_dbg $(ODIR)
