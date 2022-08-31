@@ -13,6 +13,7 @@
 #include "AudioManager.h"
 #include "OpenMPTRenderer.h"
 #include "HVLRenderer.h"
+#include "SIDRenderer.h"
 
 int
 Player_Perform(Player_State* ps)

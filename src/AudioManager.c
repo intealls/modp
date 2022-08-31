@@ -9,6 +9,7 @@
 #include "OpenMPTRenderer.h"
 #include "GMERenderer.h"
 #include "HVLRenderer.h"
+#include "SIDRenderer.h"
 
 void
 AudioManager_PlayPause(AudioManager* am)
@@ -324,13 +325,14 @@ AudioManager_Create(int fs, int bits, int channels)
 
 	PortAudio_Init(am);
 
-	am->ars = (AudioRenderer**) calloc(4, sizeof(AudioRenderer*));
+	am->ars = (AudioRenderer**) calloc(5, sizeof(AudioRenderer*));
 	assert(am->ars);
 
 	am->ars[0] = GMERenderer_Create(fs, bits, channels);
 	am->ars[1] = OpenMPTRenderer_Create(fs, bits, channels);
 	am->ars[2] = HVLRenderer_Create(fs, bits, channels);
-	am->ars[3] = NULL;
+	am->ars[3] = SIDRenderer_Create(fs, bits, channels);
+	am->ars[4] = NULL;
 
 	am->active_ar = am->ars[0];
 
