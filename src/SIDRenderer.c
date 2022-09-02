@@ -15,7 +15,7 @@
 typedef struct SIDRenderer_Data {
 	struct ReSIDfpBuilder* resid_builder;
 	struct SidTune* sid_tune;
-	struct SidEngine* sid_engine;
+	struct sidplayfp* sid_engine;
 	char title[MODP_STR_LENGTH];
 	char info[MODP_STR_LENGTH];
 	_Atomic size_t total_frames_rendered;
@@ -31,7 +31,7 @@ typedef struct SIDRenderer_Data {
 	DebugPrint((b));
 
 static void SIDRenderer_UnLoad(const AudioRenderer*);
-static int  SIDRenderer_SetTrack(const AudioRenderer*, int);
+static int  SIDRenderer_SetTrack(const AudioRenderer*, unsigned int);
 void SIDRenderer_DeleteInterfaces(const AudioRenderer*);
 
 static void
@@ -112,6 +112,8 @@ SIDRenderer_UnLoad(const AudioRenderer* obj)
 	rndr_data->title[0] = '\0';
 	rndr_data->current_track = -1;
 	rndr_data->track_length = -1;
+	rndr_data->total_frames_rendered = 0;
+	rndr_data->songs = 0;
 }
 
 static int
@@ -193,19 +195,25 @@ SIDRenderer_AppendInfo(char* dest,
 }
 
 static int
-SIDRenderer_SetTrack(const AudioRenderer* obj, int track)
+SIDRenderer_SetTrack(const AudioRenderer* obj, unsigned int track)
 {
 	DataObject(rndr_data, obj);
 	if (rndr_data->sid_tune != NULL) {
 		char* info_prefix;
 		size_t n = 0;
-		size_t songlen;
-		size_t infostr_len = numberOfInfoStringsSidTune(rndr_data->sid_tune) - 1;
+		size_t infostr_len;
 		rndr_data->current_track = track;
 
-		if (!selectSongSidTune(rndr_data->sid_tune, rndr_data->current_track)) {
+		if (!selectSongSidTune(rndr_data->sid_tune, track)) {
 			return -1;
 		}
+
+		if (!loadSidTune(rndr_data->sid_tune, rndr_data->sid_engine)) {
+			SIDRenderer_LogFunc("failed to load song");
+			return -1;
+		}
+
+		infostr_len = numberOfInfoStringsSidTune(rndr_data->sid_tune) - 1;
 
 		for (size_t i = 0; i <= infostr_len; i++) {
 			const char* info_str = infoStringSidTune(rndr_data->sid_tune, i);

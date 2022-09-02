@@ -21,18 +21,18 @@ typedef struct SidConfig SidConfig;
 typedef struct sidplayfp sidplayfp;
 typedef struct SidTune SidTune;
 
-ReSIDfpBuilder* newReSIDfpBuilder();
+struct ReSIDfpBuilder* newReSIDfpBuilder();
 void deleteReSIDfpBuilder(ReSIDfpBuilder *c);
 
-SidConfig* newSidConfig();
+struct SidConfig* newSidConfig();
 void deleteSidConfig(SidConfig *c);
 
-sidplayfp* newSidEngine();
+struct sidplayfp* newSidEngine();
 void deleteSideEngine(sidplayfp *c);
 unsigned int initSidEngine(sidplayfp *m_engine, ReSIDfpBuilder *rs, unsigned int channels, unsigned int samplerate);
 bool isPlayingSidEngine(sidplayfp *m_engine);
 
-SidTune* newSidTune(unsigned char *buf, unsigned int buflen);
+struct SidTune* newSidTune(unsigned char *buf, unsigned int buflen);
 void deleteSidTune(SidTune *c);
 
 unsigned int startSongSidTune(SidTune *m_tune);
@@ -42,9 +42,10 @@ const char* infoStringSidTune(SidTune *m_tune, unsigned int n);
 unsigned int numberOfCommentStringsSidTune(SidTune *m_tune);
 const char* commentStringSidTune(SidTune *m_tune, unsigned int n);
 unsigned int selectSongSidTune(SidTune *m_tune, unsigned int n);
+unsigned int currentSongSidTune(SidTune *m_tune);
 
 bool getStatusSidTune(SidTune *m_tune);
-unsigned int loadSidTune(SidTune *m_tune, sidplayfp *m_engine);
+unsigned int loadSidTune(struct SidTune *m_tune, struct sidplayfp *m_engine);
 unsigned int playSidEngine(sidplayfp *m_engine, short *buf, size_t buffer_samples);
 
 #ifdef __cplusplus

@@ -56,7 +56,6 @@ SidTune* newSidTune(unsigned char *buf, unsigned int buflen) {
 }
 
 unsigned int loadSidTune(SidTune *m_tune, sidplayfp *m_engine) {
-    m_tune->selectSong(0);
     if (!m_engine->load(m_tune)){
         std::cerr << m_engine->error() << std::endl;
         return 0;
@@ -77,6 +76,12 @@ unsigned int startSongSidTune(SidTune *m_tune) {
     const SidTuneInfo* tune_info = m_tune->getInfo();
     return tune_info->startSong();
 }
+
+unsigned int currentSongSidTune(SidTune *m_tune) {
+    const SidTuneInfo* tune_info = m_tune->getInfo();
+    return tune_info->currentSong();
+}
+
 unsigned int songsSidTune(SidTune *m_tune) {
     const SidTuneInfo* tune_info = m_tune->getInfo();
     return tune_info->songs();
