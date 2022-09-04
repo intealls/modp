@@ -9,6 +9,7 @@
 #include "OpenMPTRenderer.h"
 #include "GMERenderer.h"
 #include "HVLRenderer.h"
+#include "SIDRenderer.h"
 
 void
 AudioManager_PlayPause(AudioManager* am)
@@ -152,12 +153,18 @@ RenderThread(void* data)
 
 	size_t silence_count = 0;
 
-	T* temp = (T*) calloc(am->fs * am->channels, sizeof(T));
+	T* temp = (T*) calloc(MODP_RNDR_BUF_SEC * am->fs * am->channels,
+	                      sizeof(T));
 	assert(temp);
 
 	while (am->running) {
 		size_t rb_ct = RingBuffer_Count(am->render_buf);
-		size_t samples = am->fs * am->channels / 4;
+
+		size_t samples = MODP_RNDR_BUF_SEC
+		                 * am->fs
+		                 * am->channels
+		                 / 4;
+
 		size_t rendered = 0;
 
 		SDL_SemWait(am->sem);
@@ -228,7 +235,8 @@ PortAudio_Callback(const void* in, void* out,
 	if (written < to_write)
 		memset(pa_out + written, 0, (to_write - written) * sizeof(T));
 
-	if (RingBuffer_Count(am->render_buf) < (int) frames * 2 * am->channels)
+	if (RingBuffer_Count(am->render_buf)
+	        < (int) MODP_RNDR_BUF_SEC * am->fs * am->channels / 2)
 		SDL_SemPost(am->sem);
 
 	RingBuffer_Write(am->playback_buf, out, to_write);
@@ -324,18 +332,19 @@ AudioManager_Create(int fs, int bits, int channels)
 
 	PortAudio_Init(am);
 
-	am->ars = (AudioRenderer**) calloc(4, sizeof(AudioRenderer*));
+	am->ars = (AudioRenderer**) calloc(5, sizeof(AudioRenderer*));
 	assert(am->ars);
 
 	am->ars[0] = GMERenderer_Create(fs, bits, channels);
 	am->ars[1] = OpenMPTRenderer_Create(fs, bits, channels);
 	am->ars[2] = HVLRenderer_Create(fs, bits, channels);
-	am->ars[3] = NULL;
+	am->ars[3] = SIDRenderer_Create(fs, bits, channels);
+	am->ars[4] = NULL;
 
 	am->active_ar = am->ars[0];
 
 	// TODO: Fix buffer sizes and set them to sane values
-	am->render_buf = RingBuffer_Create(fs, 2);
+	am->render_buf = RingBuffer_Create(MODP_RNDR_BUF_SEC * fs * channels, 2);
 	am->playback_buf = RingBuffer_Create(fs / 16, 2);
 
 	am->mutex = SDL_CreateMutex();

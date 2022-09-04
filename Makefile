@@ -1,8 +1,10 @@
 CC = gcc
+CXX = g++
 WARNINGS = -pedantic -Wall -Wextra -Wno-unused-function -Wno-overlength-strings
 CFLAGS = -fno-omit-frame-pointer -O3 -march=native $(WARNINGS) -std=c11 -D_USE_MATH_DEFINES -D_DEFAULT_SOURCE
-LIBS = -lopenmpt -lgme -lportaudio -larchive
-INCLUDE = -Ideps/tinydir -I3rdparty/hvl -Isrc
+CXXFLAGS = -fno-omit-frame-pointer -O3 -march=native $(WARNINGS) -D_USE_MATH_DEFINES -D_DEFAULT_SOURCE
+LIBS =  -L/usr/local/lib/ -lopenmpt -lgme -lportaudio -larchive -lsidplayfp
+INCLUDE = -I/usr/local/include/sidplay -Ideps/tinydir -I3rdparty/hvl -I3rdparty/libsidplayfp -Isrc
 
 ODIR = bin
 NAME = $(ODIR)/modp
@@ -35,7 +37,8 @@ all: release
 
 release: directories executable
 
-debug: CFLAGS = -g3 -O0 $(WARNINGS) -fsanitize=address
+debug: CFLAGS := -g3 -O0 $(WARNINGS) -fsanitize=address
+debug: CXXFLAGS := -g3 -O0 $(WARNINGS) -fsanitize=address
 debug: NAME := $(NAME)_dbg
 debug: directories executable
 
@@ -43,7 +46,10 @@ directories:
 	mkdir -p $(ODIR)
 
 executable:
-	$(CC) $(CFLAGS) $(INCLUDE) src/*.c $(UI)/*.c 3rdparty/hvl/*.c $(LIBS) -o $(NAME)
+	$(CC) $(CFLAGS) $(INCLUDE) -c src/*.c $(UI)/*.c 3rdparty/hvl/*.c $(LIBS)
+	$(CXX) $(CXXFLAGS) $(INCLUDE) -c 3rdparty/libsidplayfp/libsidplayfp_wrap.cpp $(LIBS)
+	$(CXX) $(CXXFLAGS) $(INCLUDE) *.o -o $(NAME) $(LIBS)
 
 clean:
+	find . -name "*.o" -type f -delete
 	rm -rf $(NAME) $(NAME)_dbg $(ODIR)

@@ -13,6 +13,7 @@
 #define MODP_STR_LENGTH      (1024)
 #define MODP_MAX_FILESIZE    (4 * 1024 * 1024)
 #define MODP_MAX_SILENCE_MS  (3000)
+#define MODP_RNDR_BUF_SEC    (1)
 
 #define DebugPrint(ptr) \
 	do { \
