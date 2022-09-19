@@ -336,11 +336,11 @@ AudioManager_Create(int fs, int bits, int channels)
 	am->ars = (AudioRenderer**) calloc(6, sizeof(AudioRenderer*));
 	assert(am->ars);
 
-	am->ars[0] = XMPRenderer_Create(fs, bits, channels);
-	am->ars[1] = GMERenderer_Create(fs, bits, channels);
-	am->ars[2] = OpenMPTRenderer_Create(fs, bits, channels);
-	am->ars[3] = HVLRenderer_Create(fs, bits, channels);
-	am->ars[4] = SIDRenderer_Create(fs, bits, channels);
+	am->ars[0] = SIDRenderer_Create(fs, bits, channels);
+	am->ars[1] = XMPRenderer_Create(fs, bits, channels);
+	am->ars[2] = HVLRenderer_Create(fs, bits, channels);
+	am->ars[3] = GMERenderer_Create(fs, bits, channels);
+	am->ars[4] = OpenMPTRenderer_Create(fs, bits, channels);
 	am->ars[5] = NULL;
 
 	am->active_ar = am->ars[0];
