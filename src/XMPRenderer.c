@@ -18,6 +18,7 @@ typedef struct XMPRenderer_Data {
 	char info[MODP_STR_LENGTH];
 	xmp_context ctx;
 	struct xmp_module_info mod;
+	size_t song_length;
 	_Atomic size_t total_frames_rendered;
 	int fs, bits, channels;
 } XMPRenderer_Data;
@@ -27,30 +28,48 @@ typedef struct XMPRenderer_Data {
 	assert((a)); \
 	DebugPrint((b));
 
-static void
-XMPRenderer_LogFunc(const char* message, void* userdata)
-{
-	(void) userdata;
-
-	if (message)
-		fprintf(stderr, "XMPRenderer: %s\n", message);
-}
-
 static int
 XMPRenderer_Load(const AudioRenderer* obj,
                  const char* filename,
                  const void* data,
                  const size_t len)
 {
-	int r = 0;
-	const char* xmp_str;
-	const char* source;
+	char* info_ptr = NULL;
+	size_t info_copied = 0;
+
+	(void) filename;
 
 	DataObject(rndr_data, obj);
 
-	r = xmp_load_module_from_memory(rndr_data->ctx, data, len);
+	info_ptr = rndr_data->info;
+
+	assert(xmp_load_module_from_memory(rndr_data->ctx, data, len) == 0);
 
 	xmp_get_module_info(rndr_data->ctx, &rndr_data->mod);
+
+	assert(memccpy(rndr_data->title,
+	               rndr_data->mod.mod->name, '\0', MODP_STR_LENGTH));
+
+	for (int i = 0; i < rndr_data->mod.mod->ins; i++) {
+		char* ins_name = rndr_data->mod.mod->xxi[i].name;
+		int ins_len = strlen(ins_name);
+
+		if (!ins_len)
+			continue;
+
+		if (info_copied + ins_len + 1 >= MODP_STR_LENGTH)
+			break;
+
+		assert(memccpy(info_ptr + info_copied,
+		               ins_name, '\0', MODP_STR_LENGTH - info_copied));
+
+		info_copied += ins_len + 1;
+
+		info_ptr[info_copied - 1] = '\n';
+		info_ptr[info_copied] = '\0';
+	}
+
+	rndr_data->song_length = rndr_data->mod.seq_data[0].duration / 1000;
 
 	xmp_start_player(rndr_data->ctx, rndr_data->fs, 0);
 
@@ -62,14 +81,11 @@ XMPRenderer_CanLoad(const AudioRenderer* obj,
                     const void* data,
                     const size_t len)
 {
-	int r = 1;
 	struct xmp_test_info test_info;
 
 	DataObject(rndr_data, obj);
 
-	r = xmp_test_module_from_memory(data, len, &test_info);
-
-	return r == 0;
+	return xmp_test_module_from_memory(data, len, &test_info) == 0;
 }
 
 static bool
@@ -89,9 +105,11 @@ XMPRenderer_UnLoad(const AudioRenderer* obj)
 	DataObject(rndr_data, obj);
 
 	if (xmp_get_player(rndr_data->ctx, XMP_STATE_LOADED)) {
+		xmp_stop_module(rndr_data->ctx);
 		xmp_release_module(rndr_data->ctx);
 		rndr_data->title[0] = '\0';
 		rndr_data->info[0] = '\0';
+		rndr_data->song_length = 0;
 		rndr_data->total_frames_rendered = 0;
 	}
 }
@@ -106,20 +124,22 @@ XMPRenderer_Render(const AudioRenderer* obj,
 	int16_t* rndr_buf = (int16_t*) buf;
 
 	size_t byte_scale = (rndr_data->bits / 8) * rndr_data->channels;
-	size_t rendered = 0; // frames
 	size_t to_render = len / byte_scale;
 
-	xmp_play_buffer(rndr_data->ctx, buf, len, 0);
+	xmp_play_buffer(rndr_data->ctx, rndr_buf, len, 0);
 
 	rndr_data->total_frames_rendered += to_render;
 
-	return rendered;
+	return to_render;
 }
 
 static const char*
 XMPRenderer_Title(const AudioRenderer* obj)
 {
 	DataObject(rndr_data, obj);
+
+	if (xmp_get_player(rndr_data->ctx, XMP_STATE_LOADED))
+		return rndr_data->title;
 
 	return NULL;
 }
@@ -128,6 +148,9 @@ static const char*
 XMPRenderer_Info(const AudioRenderer* obj)
 {
 	DataObject(rndr_data, obj);
+
+	if (xmp_get_player(rndr_data->ctx, XMP_STATE_LOADED))
+		return rndr_data->info;
 
 	return NULL;
 }
@@ -145,7 +168,10 @@ XMPRenderer_Length(const AudioRenderer* obj)
 {
 	DataObject(rndr_data, obj);
 
-	return 90000;
+	if (xmp_get_player(rndr_data->ctx, XMP_STATE_LOADED))
+		return rndr_data->song_length;
+
+	return 0;
 }
 
 static void
@@ -166,7 +192,10 @@ XMPRenderer_Track(const AudioRenderer* obj)
 {
 	DataObject(rndr_data, obj);
 
-	return 0;
+	if (xmp_get_player(rndr_data->ctx, XMP_STATE_LOADED))
+		return 1;
+
+	return -1;
 }
 
 static int
@@ -174,7 +203,10 @@ XMPRenderer_NTracks(const AudioRenderer* obj)
 {
 	DataObject(rndr_data, obj);
 
-	return 1;
+	if (xmp_get_player(rndr_data->ctx, XMP_STATE_LOADED))
+		return 1;
+
+	return -1;
 }
 
 static int
