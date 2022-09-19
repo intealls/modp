@@ -41,6 +41,19 @@ SIDRenderer_LogFunc(const char* message)
 		fprintf(stderr, "SIDRenderer: %s\n", message);
 }
 
+static bool
+SIDRenderer_CanLoad(const AudioRenderer* obj,
+                    const void* data,
+                    const size_t len)
+{
+	(void) obj;
+	// check for 4B sid magic id in file header
+	if (len > 4 && (!memcmp(data, "PSID", 4) || !memcmp(data, "RSID", 4))) {
+		return true;
+	}
+	return false;
+}
+
 static int
 SIDRenderer_Load(const AudioRenderer* obj,
                  const char* filename,
@@ -48,6 +61,10 @@ SIDRenderer_Load(const AudioRenderer* obj,
                  const size_t len)
 {
 	DataObject(rndr_data, obj);
+
+	if (!SIDRenderer_CanLoad(obj, data, len))
+		return 1;
+
 	rndr_data->resid_builder = newReSIDfpBuilder();
 	rndr_data->sid_engine = newSidEngine();
 	rndr_data->sid_tune = newSidTune(data, len);
@@ -66,6 +83,7 @@ SIDRenderer_Load(const AudioRenderer* obj,
 
 	rndr_data->songs = songsSidTune(rndr_data->sid_tune);
 	assert(memccpy(rndr_data->title, filename, '\0', MODP_STR_LENGTH) != NULL);
+
 	return SIDRenderer_SetTrack(obj, 0);
 }
 
@@ -78,19 +96,6 @@ void SIDRenderer_DeleteInterfaces(const AudioRenderer* obj)
 	rndr_data->resid_builder = NULL;
 	rndr_data->sid_engine = NULL;
 	rndr_data->sid_tune = NULL;
-}
-
-static bool
-SIDRenderer_CanLoad(const AudioRenderer* obj,
-                    const void* data,
-                    const size_t len)
-{
-	(void) obj;
-	// check for 4B sid magic id in file header
-	if (len > 4 && (!memcmp(data, "PSID", 4) || !memcmp(data, "RSID", 4))) {
-		return true;
-	}
-	return false;
 }
 
 static bool
