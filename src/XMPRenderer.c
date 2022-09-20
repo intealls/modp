@@ -41,9 +41,10 @@ XMPRenderer_Load(const AudioRenderer* obj,
 
 	DataObject(rndr_data, obj);
 
-	info_ptr = rndr_data->info;
+	if (xmp_load_module_from_memory(rndr_data->ctx, data, len))
+		return 1;
 
-	assert(xmp_load_module_from_memory(rndr_data->ctx, data, len) == 0);
+	info_ptr = rndr_data->info;
 
 	xmp_get_module_info(rndr_data->ctx, &rndr_data->mod);
 
