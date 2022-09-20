@@ -31,7 +31,7 @@ typedef struct SIDRenderer_Data {
 	DebugPrint((b));
 
 static void SIDRenderer_UnLoad(const AudioRenderer*);
-static int  SIDRenderer_SetTrack(const AudioRenderer*, unsigned int);
+static int  SIDRenderer_SetTrack(const AudioRenderer*, int);
 void SIDRenderer_DeleteInterfaces(const AudioRenderer*);
 
 static void
@@ -195,11 +195,11 @@ SIDRenderer_AppendInfo(char* dest,
 }
 
 static int
-SIDRenderer_SetTrack(const AudioRenderer* obj, unsigned int track)
+SIDRenderer_SetTrack(const AudioRenderer* obj, int track)
 {
 	DataObject(rndr_data, obj);
 	if (rndr_data->sid_tune != NULL) {
-		char* info_prefix;
+		char* info_prefix = NULL;
 		size_t n = 0;
 		size_t infostr_len;
 		rndr_data->current_track = track;
@@ -255,6 +255,8 @@ SIDRenderer_Length(const AudioRenderer* obj)
 		else
 			return (int) rndr_data->track_length / rndr_data->fs;
 	}
+
+	return 0;
 }
 
 static void

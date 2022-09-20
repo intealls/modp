@@ -51,8 +51,8 @@ unsigned int initSidEngine(sidplayfp *m_engine, ReSIDfpBuilder *rs, unsigned int
     return 1;
 }
 
-SidTune* newSidTune(unsigned char *buf, unsigned int buflen) {
-    return new SidTune(buf, buflen);
+SidTune* newSidTune(const void *buf, unsigned int buflen) {
+    return new SidTune((const unsigned char*) buf, buflen);
 }
 
 unsigned int loadSidTune(SidTune *m_tune, sidplayfp *m_engine) {
