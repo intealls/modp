@@ -37,15 +37,15 @@ AudioManager_PlayPause(AudioManager* am)
 	}
 }
 
-bool
+AudioRenderer*
 AudioManager_CanLoad(AudioManager* am,
                      void* data,
                      size_t len)
 {
-	bool r = false;
 	assert(am);
 
 	AudioRenderer** p;
+	AudioRenderer* rend = NULL;
 
 	SDL_LockMutex(am->mutex);
 
@@ -53,7 +53,7 @@ AudioManager_CanLoad(AudioManager* am,
 
 	while (*p != NULL) {
 		if (AudioRenderer_CanLoad(*p, data, len)) {
-			r = true;
+			rend = *p;
 			break;
 		}
 
@@ -62,11 +62,36 @@ AudioManager_CanLoad(AudioManager* am,
 
 	SDL_UnlockMutex(am->mutex);
 
-	return r;
+	return rend;
+}
+
+static bool
+AudioManager_TryLoad(AudioManager* am,
+                     AudioRenderer* rend,
+                     const char* filename,
+                     void* data,
+                     size_t len)
+{
+	assert(am);
+
+	if (!AudioRenderer_Load(rend, filename, data, len)) {
+		am->pa_err = Pa_StartStream(am->stream);
+		am->playing = true;
+		am->active_ar = rend;
+		atomic_store(&am->cb_msg, CBM_CLR_BUF);
+
+		return 0;
+	}
+
+	am->pa_err = Pa_StopStream(am->stream);
+	am->playing = false;
+
+	return 1;
 }
 
 int
 AudioManager_Load(AudioManager* am,
+                  AudioRenderer* rend,
                   const char* filename,
                   void* data,
                   size_t len)
@@ -80,21 +105,19 @@ AudioManager_Load(AudioManager* am,
 
 	AudioRenderer_UnLoad(am->active_ar);
 
-	p = am->ars;
+	if (rend != NULL && !AudioManager_TryLoad(am, rend, filename, data, len)) {
+		r = 0;
+	} else {
+		p = am->ars;
 
-	while (*p != NULL) {
-		if (!AudioRenderer_Load(*p, filename, data, len)) {
-			am->pa_err = Pa_StartStream(am->stream);
-			am->playing = true;
-			am->active_ar = *p;
-			atomic_store(&am->cb_msg, CBM_CLR_BUF);
-			r = 0;
-			break;
-		} else {
-			am->pa_err = Pa_StopStream(am->stream);
-			am->playing = false;
+		while (*p != NULL) {
+			if (!AudioManager_TryLoad(am, rend, filename, data, len)) {
+				r = 0;
+				break;
+			}
+
+			p++;
 		}
-		p++;
 	}
 
 	SDL_UnlockMutex(am->mutex);

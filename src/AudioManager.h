@@ -48,12 +48,16 @@ typedef struct AudioManager {
 	PaError pa_err;
 } AudioManager;
 
-AudioManager* AudioManager_Create(int, int, int);
-void          AudioManager_Destroy(AudioManager*);
-bool          AudioManager_CanLoad(AudioManager*, void*, size_t);
-int           AudioManager_Load(AudioManager*, const char*, void*, size_t);
-void          AudioManager_PlayPause(AudioManager*);
-bool          AudioManager_AlterSubTrack(AudioManager*, int);
-bool          AudioManager_SilenceDetected(AudioManager*);
+AudioManager*  AudioManager_Create(int, int, int);
+void           AudioManager_Destroy(AudioManager*);
+AudioRenderer* AudioManager_CanLoad(AudioManager*, void*, size_t);
+int            AudioManager_Load(AudioManager*,
+                                 AudioRenderer*,
+                                 const char*,
+                                 void*,
+                                 size_t);
+void           AudioManager_PlayPause(AudioManager*);
+bool           AudioManager_AlterSubTrack(AudioManager*, int);
+bool           AudioManager_SilenceDetected(AudioManager*);
 
 #endif /* SRC_AUDIOMANAGER_H_ */
