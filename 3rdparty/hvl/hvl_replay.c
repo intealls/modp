@@ -580,6 +580,8 @@ struct hvl_tune *hvl_load_hvl( const uint8 *buf, uint32 buflen, uint32 freq, uin
   struct hvl_tune *ht;
   struct hvl_plsentry *ple;
 
+  (void) defstereo;
+
   posn = ((buf[6]&0x0f)<<8)|buf[7];
   insn = buf[12];
   ssn  = buf[13];
@@ -929,6 +931,7 @@ void hvl_process_stepfx_1( struct hvl_tune *ht, struct hvl_voice *voice, int32 F
 
 void hvl_process_stepfx_2( struct hvl_tune *ht, struct hvl_voice *voice, int32 FX, int32 FXParam, int32 *Note )
 {
+  (void) ht;
   switch( FX )
   {
     case 0x9: // Set squarewave offset
@@ -1223,6 +1226,7 @@ void hvl_process_step( struct hvl_tune *ht, struct hvl_voice *voice )
 
 void hvl_plist_command_parse( struct hvl_tune *ht, struct hvl_voice *voice, int32 FX, int32 FXParam )
 {
+  (void) ht;
   switch( FX )
   {
     case 0:

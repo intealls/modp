@@ -32,7 +32,7 @@ void deleteSideEngine(sidplayfp *c);
 unsigned int initSidEngine(sidplayfp *m_engine, ReSIDfpBuilder *rs, unsigned int channels, unsigned int samplerate);
 bool isPlayingSidEngine(sidplayfp *m_engine);
 
-struct SidTune* newSidTune(unsigned char *buf, unsigned int buflen);
+struct SidTune* newSidTune(const void *buf, unsigned int buflen);
 void deleteSidTune(SidTune *c);
 
 unsigned int startSongSidTune(SidTune *m_tune);

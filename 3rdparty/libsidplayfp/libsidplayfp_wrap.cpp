@@ -51,15 +51,21 @@ unsigned int initSidEngine(sidplayfp *m_engine, ReSIDfpBuilder *rs, unsigned int
     return 1;
 }
 
-SidTune* newSidTune(unsigned char *buf, unsigned int buflen) {
-    return new SidTune(buf, buflen);
+SidTune* newSidTune(const void *buf, unsigned int buflen) {
+    return new SidTune((const unsigned char*) buf, buflen);
 }
 
 unsigned int loadSidTune(SidTune *m_tune, sidplayfp *m_engine) {
-    if (!m_engine->load(m_tune)){
+    if (!m_tune->getStatus()) {
+        std::cerr << m_tune->statusString() << std::endl;
+        return 0;
+    }
+
+    if (!m_engine->load(m_tune)) {
         std::cerr << m_engine->error() << std::endl;
         return 0;
     }
+
     return 1;
 }
 

@@ -6,6 +6,7 @@
 #include <portaudio.h>
 
 #include "AudioManager.h"
+#include "XMPRenderer.h"
 #include "OpenMPTRenderer.h"
 #include "GMERenderer.h"
 #include "HVLRenderer.h"
@@ -36,15 +37,15 @@ AudioManager_PlayPause(AudioManager* am)
 	}
 }
 
-bool
+AudioRenderer*
 AudioManager_CanLoad(AudioManager* am,
                      void* data,
                      size_t len)
 {
-	bool r = false;
 	assert(am);
 
 	AudioRenderer** p;
+	AudioRenderer* rend = NULL;
 
 	SDL_LockMutex(am->mutex);
 
@@ -52,7 +53,7 @@ AudioManager_CanLoad(AudioManager* am,
 
 	while (*p != NULL) {
 		if (AudioRenderer_CanLoad(*p, data, len)) {
-			r = true;
+			rend = *p;
 			break;
 		}
 
@@ -61,11 +62,36 @@ AudioManager_CanLoad(AudioManager* am,
 
 	SDL_UnlockMutex(am->mutex);
 
-	return r;
+	return rend;
+}
+
+static bool
+AudioManager_TryLoad(AudioManager* am,
+                     AudioRenderer* rend,
+                     const char* filename,
+                     void* data,
+                     size_t len)
+{
+	assert(am);
+
+	if (!AudioRenderer_Load(rend, filename, data, len)) {
+		am->pa_err = Pa_StartStream(am->stream);
+		am->playing = true;
+		am->active_ar = rend;
+		atomic_store(&am->cb_msg, CBM_CLR_BUF);
+
+		return 0;
+	}
+
+	am->pa_err = Pa_StopStream(am->stream);
+	am->playing = false;
+
+	return 1;
 }
 
 int
 AudioManager_Load(AudioManager* am,
+                  AudioRenderer* rend,
                   const char* filename,
                   void* data,
                   size_t len)
@@ -79,21 +105,19 @@ AudioManager_Load(AudioManager* am,
 
 	AudioRenderer_UnLoad(am->active_ar);
 
-	p = am->ars;
+	if (rend != NULL && !AudioManager_TryLoad(am, rend, filename, data, len)) {
+		r = 0;
+	} else {
+		p = am->ars;
 
-	while (*p != NULL) {
-		if (!AudioRenderer_Load(*p, filename, data, len)) {
-			am->pa_err = Pa_StartStream(am->stream);
-			am->playing = true;
-			am->active_ar = *p;
-			atomic_store(&am->cb_msg, CBM_CLR_BUF);
-			r = 0;
-			break;
-		} else {
-			am->pa_err = Pa_StopStream(am->stream);
-			am->playing = false;
+		while (*p != NULL) {
+			if (!AudioManager_TryLoad(am, rend, filename, data, len)) {
+				r = 0;
+				break;
+			}
+
+			p++;
 		}
-		p++;
 	}
 
 	SDL_UnlockMutex(am->mutex);
@@ -332,14 +356,15 @@ AudioManager_Create(int fs, int bits, int channels)
 
 	PortAudio_Init(am);
 
-	am->ars = (AudioRenderer**) calloc(5, sizeof(AudioRenderer*));
+	am->ars = (AudioRenderer**) calloc(6, sizeof(AudioRenderer*));
 	assert(am->ars);
 
-	am->ars[0] = GMERenderer_Create(fs, bits, channels);
-	am->ars[1] = OpenMPTRenderer_Create(fs, bits, channels);
+	am->ars[0] = SIDRenderer_Create(fs, bits, channels);
+	am->ars[1] = XMPRenderer_Create(fs, bits, channels);
 	am->ars[2] = HVLRenderer_Create(fs, bits, channels);
-	am->ars[3] = SIDRenderer_Create(fs, bits, channels);
-	am->ars[4] = NULL;
+	am->ars[3] = GMERenderer_Create(fs, bits, channels);
+	am->ars[4] = OpenMPTRenderer_Create(fs, bits, channels);
+	am->ars[5] = NULL;
 
 	am->active_ar = am->ars[0];
 

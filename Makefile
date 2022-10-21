@@ -3,7 +3,7 @@ CXX = g++
 WARNINGS = -pedantic -Wall -Wextra -Wno-unused-function -Wno-overlength-strings
 CFLAGS = -fno-omit-frame-pointer -O3 -march=native $(WARNINGS) -std=c11 -D_USE_MATH_DEFINES -D_DEFAULT_SOURCE
 CXXFLAGS = -fno-omit-frame-pointer -O3 -march=native $(WARNINGS) -D_USE_MATH_DEFINES -D_DEFAULT_SOURCE
-LIBS =  -L/usr/local/lib/ -lopenmpt -lgme -lportaudio -larchive -lsidplayfp
+LIBS =  -L/usr/local/lib/ -lopenmpt -lgme -lportaudio -larchive -lsidplayfp -lxmp
 INCLUDE = -I/usr/local/include/sidplay -Ideps/tinydir -I3rdparty/hvl -I3rdparty/libsidplayfp -Isrc
 
 ODIR = bin

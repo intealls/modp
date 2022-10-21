@@ -38,8 +38,10 @@ Player_Perform(Player_State* ps)
 		                         MODP_MAX_FILESIZE);
 
 		if (data != NULL) {
-			if (AudioManager_CanLoad(ps->am, data, len))
-				AudioManager_Load(ps->am, filename, data, len);
+			AudioRenderer* rend = AudioManager_CanLoad(ps->am, data, len);
+
+			if (rend)
+				AudioManager_Load(ps->am, rend, filename, data, len);
 
 			free(data);
 		}
