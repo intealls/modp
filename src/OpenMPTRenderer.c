@@ -1,6 +1,6 @@
 // Copyright intealls
 // License: GPL v3
-
+#ifdef HAVE_OPENMPT
 #include <assert.h>
 #include <stdbool.h>
 #include <string.h>
@@ -317,3 +317,4 @@ OpenMPTRenderer_Create(int fs, int bits, int channels)
 
 	return arndr;
 }
+#endif

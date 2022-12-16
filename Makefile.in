@@ -314,22 +314,25 @@ top_build_prefix = @top_build_prefix@
 top_builddir = @top_builddir@
 top_srcdir = @top_srcdir@
 AUTOMAKE_OPTIONS = foreign subdir-objects
+@DEBUG_FALSE@AM_CFLAGS = -Isrc -Iglui -Ideps/tinydir -I3rdparty/hvl \
+@DEBUG_FALSE@	-I3rdparty/libsidplayfp -fno-omit-frame-pointer \
+@DEBUG_FALSE@	-O2 -Wall -Wextra -Wno-unused-function \
+@DEBUG_FALSE@	-Wno-overlength-strings -std=c11 \
+@DEBUG_FALSE@	-D_USE_MATH_DEFINES -D_DEFAULT_SOURCE \
+@DEBUG_FALSE@	$(am__append_1)
 @DEBUG_TRUE@AM_CFLAGS = -Isrc -Iglui -Ideps/tinydir -I3rdparty/hvl \
 @DEBUG_TRUE@	-I3rdparty/libsidplayfp -g3 -O0 -fsanitize=address \
 @DEBUG_TRUE@	-Wall -Wextra -Wno-unused-function \
 @DEBUG_TRUE@	-Wno-overlength-strings $(am__append_1)
-AM_CFLAGS = -Isrc -Iglui -Ideps/tinydir -I3rdparty/hvl \
-	-I3rdparty/libsidplayfp -fno-omit-frame-pointer -O2 -Wall \
-	-Wextra -Wno-unused-function -Wno-overlength-strings -std=c11 \
-	-D_USE_MATH_DEFINES -D_DEFAULT_SOURCE $(am__append_1)
+@DEBUG_FALSE@AM_CXXFLAGS = -Isrc -Iglui -Ideps/tinydir -I3rdparty/hvl \
+@DEBUG_FALSE@	-I3rdparty/libsidplayfp -fno-omit-frame-pointer \
+@DEBUG_FALSE@	-O2 -pedantic -Wall -Wextra -Wno-unused-function \
+@DEBUG_FALSE@	-Wno-overlength-strings -D_USE_MATH_DEFINES \
+@DEBUG_FALSE@	-D_DEFAULT_SOURCE $(am__append_2)
 @DEBUG_TRUE@AM_CXXFLAGS = -Isrc -Iglui -Ideps/tinydir -I3rdparty/hvl \
 @DEBUG_TRUE@	-I3rdparty/libsidplayfp -g3 -O0 -fsanitize=address \
 @DEBUG_TRUE@	-Wall -Wextra -Wno-unused-function \
 @DEBUG_TRUE@	-Wno-overlength-strings $(am__append_2)
-AM_CXXFLAGS = -Isrc -Iglui -Ideps/tinydir -I3rdparty/hvl \
-	-I3rdparty/libsidplayfp -fno-omit-frame-pointer -O2 -pedantic \
-	-Wall -Wextra -Wno-unused-function -Wno-overlength-strings \
-	-D_USE_MATH_DEFINES -D_DEFAULT_SOURCE $(am__append_2)
 modp_SOURCES = 3rdparty/hvl/hvl_replay.c 3rdparty/libsidplayfp/libsidplayfp_wrap.cpp src/AudioManager.c src/Player.c src/OpenMPTRenderer.c src/HVLRenderer.c src/HCS64File.c src/LocalDir.c src/GMERenderer.c src/XMPRenderer.c src/SIDRenderer.c glui/GL.c glui/Font.c glui/Main.c glui/GLWindow.c
 modp_LDADD = -L/usr/local/lib/
 all: all-am

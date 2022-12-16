@@ -21,6 +21,13 @@ AC_ARG_ENABLE([debug],
   [enable_debug=no]
 )
 
+AC_ARG_ENABLE([openmpt],
+  [AS_HELP_STRING([--disable-openmpt],
+                  [disable openmpt support @<:@check@:>@])],
+  [:],
+  [enable_openmpt=check]
+)
+
 AM_CONDITIONAL([DEBUG], [test x$enable_debug = xyes])
 AM_CONDITIONAL([WINDOWS], [test x$windows = xtrue])
 # Checks for libraries.
@@ -29,7 +36,9 @@ AC_CHECK_LIB([archive], [main], [], [AC_MSG_ERROR([archive lib is required])])
 AC_CHECK_LIB([fftw3f], [main], [], [AC_MSG_ERROR([fftw3f is required])])
 AC_CHECK_LIB([gme], [main], [], [AC_MSG_ERROR([gme lib is required])])
 AC_CHECK_LIB([m], [main], [], [AC_MSG_ERROR([libm is required])])
-AC_CHECK_LIB([openmpt], [main], [], [AC_MSG_ERROR([openmpt is required])])
+AS_IF([test "$enable_openmpt" != "no"],
+  AC_CHECK_LIB([openmpt], [main], [], [AC_MSG_ERROR([openmpt is required])])
+)
 AC_CHECK_LIB([portaudio], [main], [], [AC_MSG_ERROR([portaudio is required])])
 AC_CHECK_LIB([sidplayfp], [main], [], [AC_MSG_ERROR([libsidplayfp is required])])
 AC_CHECK_LIB([xmp], [main], [], [AC_MSG_ERROR([xmp is required])])
