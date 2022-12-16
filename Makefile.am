@@ -1,10 +1,11 @@
 AUTOMAKE_OPTIONS = foreign subdir-objects
-AM_CFLAGS = -Isrc -Iglui -Ideps/tinydir -I3rdparty/hvl -I3rdparty/libsidplayfp -fno-omit-frame-pointer -O2 -Wall -Wextra -Wno-unused-function -Wno-overlength-strings -std=c11 -D_USE_MATH_DEFINES -D_DEFAULT_SOURCE
-AM_CXXFLAGS = -Isrc -Iglui -Ideps/tinydir -I3rdparty/hvl -I3rdparty/libsidplayfp -fno-omit-frame-pointer -O2 -pedantic -Wall -Wextra -Wno-unused-function -Wno-overlength-strings -D_USE_MATH_DEFINES -D_DEFAULT_SOURCE
 
 if DEBUG
 AM_CFLAGS = -Isrc -Iglui -Ideps/tinydir -I3rdparty/hvl -I3rdparty/libsidplayfp -g3 -O0 -fsanitize=address -Wall -Wextra -Wno-unused-function -Wno-overlength-strings
 AM_CXXFLAGS = -Isrc -Iglui -Ideps/tinydir -I3rdparty/hvl -I3rdparty/libsidplayfp -g3 -O0 -fsanitize=address -Wall -Wextra -Wno-unused-function -Wno-overlength-strings
+else
+AM_CFLAGS = -Isrc -Iglui -Ideps/tinydir -I3rdparty/hvl -I3rdparty/libsidplayfp -fno-omit-frame-pointer -O2 -Wall -Wextra -Wno-unused-function -Wno-overlength-strings -std=c11 -D_USE_MATH_DEFINES -D_DEFAULT_SOURCE
+AM_CXXFLAGS = -Isrc -Iglui -Ideps/tinydir -I3rdparty/hvl -I3rdparty/libsidplayfp -fno-omit-frame-pointer -O2 -pedantic -Wall -Wextra -Wno-unused-function -Wno-overlength-strings -D_USE_MATH_DEFINES -D_DEFAULT_SOURCE
 endif
 
 if WINDOWS
