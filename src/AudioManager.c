@@ -7,7 +7,9 @@
 
 #include "AudioManager.h"
 #include "XMPRenderer.h"
+#ifdef HAVE_OPENMPT
 #include "OpenMPTRenderer.h"
+#endif
 #include "GMERenderer.h"
 #include "HVLRenderer.h"
 #include "SIDRenderer.h"
@@ -355,16 +357,23 @@ AudioManager_Create(int fs, int bits, int channels)
 	atomic_store(&am->rt_msg, RTM_NONE);
 
 	PortAudio_Init(am);
-
+#ifdef HAVE_OPENMPT
 	am->ars = (AudioRenderer**) calloc(6, sizeof(AudioRenderer*));
+#else
+	am->ars = (AudioRenderer**) calloc(5, sizeof(AudioRenderer*));
+#endif
 	assert(am->ars);
 
 	am->ars[0] = SIDRenderer_Create(fs, bits, channels);
 	am->ars[1] = XMPRenderer_Create(fs, bits, channels);
 	am->ars[2] = HVLRenderer_Create(fs, bits, channels);
 	am->ars[3] = GMERenderer_Create(fs, bits, channels);
+#ifndef HAVE_OPENMPT
+	am->ars[4] = NULL;
+#else
 	am->ars[4] = OpenMPTRenderer_Create(fs, bits, channels);
 	am->ars[5] = NULL;
+#endif
 
 	am->active_ar = am->ars[0];
 

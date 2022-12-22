@@ -35,8 +35,26 @@ Uses MSYS2 on Windows.
 - Download libopenmpt from [here](https://lib.openmpt.org/libopenmpt/download), build and install.
 - Download game-music-emu 0.6.2, from [here](https://bitbucket.org/mpyne/game-music-emu/downloads), apply `contrib/gme-0.6.2-playlist_patch.diff`, build and install (use -G "MSYS Makefiles" if on Windows). The patch improves playlist compatibility with music files from \*.joshw.info.
 - Install prerequisites (libportaudio, libarchive, SDL2, fftw etc).
-- Run `make` (if on Ubuntu, remove `-liconv` dependency).
-
+- run `./configure && make`
+Building on ubuntu +22:
+```
+sudo apt update
+sudo apt install build-essential git cmake libsdl2-dev libarchive-dev portaudio19-dev libxmp-dev libopenmpt-dev libfftw3-dev libsidplayfp-dev
+git clone https://github.com/intealls/modp.git
+cd modp
+git clone https://bitbucket.org/mpyne/game-music-emu.git
+cd game-music-emu/
+# patch, build and install gme
+patch -p1 < ../contrib/gme-b3d158a-playlist.patch
+mkdir build
+cd build
+cmake ../ -DCMAKE_INSTALL_PREFIX=/usr/local
+make && make install
+cd ..
+# build modp
+./configure
+make
+```
 ## Notes
 
 You can find a bunch of interesting bitmap fonts to try out [here](https://github.com/Tecate/bitmap-fonts), not all of them work though.
