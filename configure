@@ -6630,6 +6630,48 @@ else $as_nop
   as_fn_error $? "SDL2 is required" "$LINENO" 5
 fi
 
+{ printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking for main in -lSDL2_image" >&5
+printf %s "checking for main in -lSDL2_image... " >&6; }
+if test ${ac_cv_lib_SDL2_image_main+y}
+then :
+  printf %s "(cached) " >&6
+else $as_nop
+  ac_check_lib_save_LIBS=$LIBS
+LIBS="-lSDL2_image  $LIBS"
+cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+
+
+int
+main (void)
+{
+return main ();
+  ;
+  return 0;
+}
+_ACEOF
+if ac_fn_c_try_link "$LINENO"
+then :
+  ac_cv_lib_SDL2_image_main=yes
+else $as_nop
+  ac_cv_lib_SDL2_image_main=no
+fi
+rm -f core conftest.err conftest.$ac_objext conftest.beam \
+    conftest$ac_exeext conftest.$ac_ext
+LIBS=$ac_check_lib_save_LIBS
+fi
+{ printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: $ac_cv_lib_SDL2_image_main" >&5
+printf "%s\n" "$ac_cv_lib_SDL2_image_main" >&6; }
+if test "x$ac_cv_lib_SDL2_image_main" = xyes
+then :
+  printf "%s\n" "#define HAVE_LIBSDL2_IMAGE 1" >>confdefs.h
+
+  LIBS="-lSDL2_image $LIBS"
+
+else $as_nop
+  as_fn_error $? "SDL2_image is required" "$LINENO" 5
+fi
+
 { printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking for main in -larchive" >&5
 printf %s "checking for main in -larchive... " >&6; }
 if test ${ac_cv_lib_archive_main+y}
