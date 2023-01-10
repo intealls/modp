@@ -16,8 +16,10 @@ typedef struct Vis_State Vis_State;
 #include "Font.h"
 #include "RingBuffer.h"
 #include "Player.h"
+#include "Config.h"
 
 typedef struct Options {
+    char configfile[_TINYDIR_PATH_MAX];
 	char path[_TINYDIR_PATH_MAX];
 	char fontpath[_TINYDIR_PATH_MAX];
 	bool font_dbl;
@@ -62,6 +64,7 @@ typedef enum Vis { VIS_FFT = 0, VIS_SCOPE = 1, VIS_NONE = 2 } Vis;
 
 struct GLWindow_State {
 	SDL_Window* sdl_wdw;
+    SDL_Cursor* sdl_cur;
 	Vis vis;
 	Vis_State* v;
 
@@ -77,7 +80,7 @@ struct GLWindow_State {
 };
 
 bool            GLWindow_ProcessEvents(GLWindow_State*, bool*);
-GLWindow_State* GLWindow_Init(Options*, Player_State*);
+GLWindow_State* GLWindow_Init(Config*, Options*, Player_State*);
 void            GLWindow_Destroy(GLWindow_State*);
 
 void            GLUI_Draw(GLWindow_State*);
