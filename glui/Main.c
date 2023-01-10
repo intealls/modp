@@ -169,6 +169,10 @@ main(int argc, char* argv[])
 	Config* cfg = malloc(sizeof(Config));
 	ParseConfig(cfg, opt.configfile);
 
+	if ((strcmp(opt.path, ".") == 0) && ((cfg->g_startpath != NULL) && (cfg->g_startpath[0] != '\0'))) {
+	    strcpy(opt.path, cfg->g_startpath);
+	}
+
 	ps = Player_Init(48e3, 16, 2, opt.min_length,
 	                 opt.auto_inc, opt.auto_rnd, opt.path);
 	assert(ps);

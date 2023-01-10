@@ -8,6 +8,7 @@
 #include <errno.h>
 
 typedef struct Config {
+    char* g_startpath;
     char* gfx_fontpath;
     char* gfx_cursor;
     int gfx_sdl_window;
