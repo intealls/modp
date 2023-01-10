@@ -1,11 +1,14 @@
 // Copyright intealls
 // License: GPL v3
 
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 #include <unistd.h>
-
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_thread.h>
 
+#include "Config.h"
 #include "Font.h"
 #include "GL.h"
 #include "GLWindow.h"
@@ -34,7 +37,8 @@ Usage(Options* o, const char* name)
 	        "-l    Framerate limit, default is %.2f\n"
 	        "-r    Background color red component, default is %.2f\n"
 	        "-g    Background color green component, default is %.2f\n"
-	        "-b    Background color blue component, default is %.2f\n\n"
+	        "-b    Background color blue component, default is %.2f\n"
+	        "-c    Config file, default is $HOME/modp.toml\n\n"
 	        "-h    Show default command line options\n\n",
 	        name,
 	        o->path,
@@ -47,14 +51,15 @@ Usage(Options* o, const char* name)
 	        o->fps_limit,
 	        o->clr_r,
 	        o->clr_g,
-	        o->clr_b);
+	        o->clr_b,
+	        o->configfile);
 }
 
 void
 ParseOptions(Options* o, int argc, char* argv[])
 {
 	int c, tmp;
-	while ((c = getopt(argc, argv, "p:f:v:a:n:m:w:e:l:r:g:b:")) != -1) {
+	while ((c = getopt(argc, argv, "p:f:v:a:n:m:w:e:l:r:g:b:c:")) != -1) {
 		switch (c) {
 			case 'p':
 				strcpy(o->path, optarg);
@@ -105,6 +110,9 @@ ParseOptions(Options* o, int argc, char* argv[])
 				if (sscanf(optarg, "%f", &o->clr_b) != 1) goto error;
 				o->clr_b = min_float(max_float(o->clr_b, 0.f), 1.f);
 				break;
+			case 'c':
+				strcpy(o->configfile, optarg);
+				break;
 			default:
 				goto error;
 		}
@@ -137,6 +145,7 @@ main(int argc, char* argv[])
 	Uint32 t_prev = 0;
 
 	Options opt = { .path = ".",
+	                .configfile = "",
 	                .fontpath = "",
 	                .font_dbl = false,
 	                .wdw_width = 800,
@@ -147,7 +156,8 @@ main(int argc, char* argv[])
 	                .fps_limit = 60.f,
 	                .clr_r = 0.0f,
 	                .clr_g = 0.33f,
-	                .clr_b = 0.67f };
+	                .clr_b = 0.67f,
+    };
 
 	if (CheckOptions(argc, argv)) {
 		Usage(&opt, argv[0]);
@@ -156,11 +166,18 @@ main(int argc, char* argv[])
 
 	ParseOptions(&opt, argc, argv);
 
+	Config* cfg = malloc(sizeof(Config));
+	ParseConfig(cfg, opt.configfile);
+
+	if ((strcmp(opt.path, ".") == 0) && ((cfg->g_startpath != NULL) && (cfg->g_startpath[0] != '\0'))) {
+	    strcpy(opt.path, cfg->g_startpath);
+	}
+
 	ps = Player_Init(48e3, 16, 2, opt.min_length,
 	                 opt.auto_inc, opt.auto_rnd, opt.path);
 	assert(ps);
 
-	wdw = GLWindow_Init(&opt, ps);
+	wdw = GLWindow_Init(cfg, &opt, ps);
 	assert(wdw);
 
 	t_prev = SDL_GetTicks();
@@ -188,6 +205,6 @@ main(int argc, char* argv[])
 
 	Player_Destroy(wdw->ps);
 	GLWindow_Destroy(wdw);
-
+	free(cfg);
 	return 0;
 }

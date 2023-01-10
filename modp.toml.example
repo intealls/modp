@@ -1,0 +1,6 @@
+[general]
+startpath = "/home/USERNAME/music"
+[gfx]
+fontpath = "/home/USERNAME/.modp/MYFONTS"
+cursor = "/home/USERNAME/.modp/cursors/amiga_wb13_normal.cur"
+api = "opengl"

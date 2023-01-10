@@ -30,15 +30,6 @@ typedef struct HVLRenderer_Data {
 	assert((a)); \
 	DebugPrint((b));
 
-static void
-HVLRenderer_LogFunc(const char* message, void* userdata)
-{
-	(void) userdata;
-
-	if (message)
-		fprintf(stderr, "HVLRenderer: %s\n", message);
-}
-
 static int
 HVLRenderer_Load(const AudioRenderer* obj,
                  const char* filename,

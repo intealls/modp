@@ -32,6 +32,7 @@ AM_CONDITIONAL([DEBUG], [test x$enable_debug = xyes])
 AM_CONDITIONAL([WINDOWS], [test x$windows = xtrue])
 # Checks for libraries.
 AC_CHECK_LIB([SDL2], [SDL_Init], [], [AC_MSG_ERROR([SDL2 is required])])
+AC_CHECK_LIB([SDL2_image], [main], [], [AC_MSG_ERROR([SDL2_image is required])])
 AC_CHECK_LIB([archive], [main], [], [AC_MSG_ERROR([archive lib is required])])
 AC_CHECK_LIB([fftw3f], [main], [], [AC_MSG_ERROR([fftw3f is required])])
 AC_CHECK_LIB([gme], [main], [], [AC_MSG_ERROR([gme lib is required])])
