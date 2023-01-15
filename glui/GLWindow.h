@@ -20,6 +20,8 @@ typedef struct Vis_State Vis_State;
 typedef struct Options {
 	char path[_TINYDIR_PATH_MAX];
 	char fontpath[_TINYDIR_PATH_MAX];
+	char cursorpath[_TINYDIR_PATH_MAX];
+	char cfgpath[_TINYDIR_PATH_MAX];
 	bool font_dbl;
 	size_t wdw_width;
 	size_t wdw_height;
@@ -30,6 +32,7 @@ typedef struct Options {
 	float clr_r;
 	float clr_g;
 	float clr_b;
+	float font_shake_factor;
 } Options;
 
 typedef struct Star {
@@ -55,6 +58,7 @@ struct Vis_State {
 	float* signal;
 	float* spectrum;
 	float* window;
+	float mean_energy_band_div16;
 	fftwf_complex* result;
 };
 
@@ -74,6 +78,8 @@ struct GLWindow_State {
 	size_t max_items;
 
 	Player_State* ps;
+
+	float font_shake_factor;
 };
 
 bool            GLWindow_ProcessEvents(GLWindow_State*, bool*);

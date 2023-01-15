@@ -20,6 +20,113 @@
 #include "Player.h"
 #include "Globals.h"
 
+static Vis_State*
+Vis_Init(size_t wdw_width, size_t wdw_height, size_t nsamples, size_t nstars)
+{
+	Vis_State* v = (Vis_State*) calloc(1, sizeof(Vis_State));
+	assert(v);
+
+	v->fft_len = wdw_width;
+	v->nsamples = nsamples;
+
+	v->vis_len = wdw_width * 2;
+	v->vis_buf = (T*) calloc(v->vis_len, sizeof(T));
+	assert(v->vis_buf);
+
+	v->window = (float*) calloc(v->fft_len, sizeof(float));
+	assert(v->window);
+
+	v->signal = (float*) calloc(v->fft_len, sizeof(float));
+	assert(v->signal);
+
+	v->spectrum = (float*) calloc(v->fft_len, sizeof(float));
+	assert(v->spectrum);
+
+	v->result = (fftwf_complex*) calloc(v->fft_len, sizeof(fftwf_complex));
+	assert(v->result);
+
+	// Blackman-Nuttall window (B=1.9761), ~100dB sidelobe attenuation
+	// from Wikipedia
+
+	for (size_t i = 0; i < nsamples; i++) {
+		v->window[i] = 0.3635819 - 0.4891775 * cos(2 * M_PI * i / (nsamples - 1)) +
+		               0.1365995 * cos(4 * M_PI * i / (nsamples - 1)) -
+		               0.0106411 * cos(6 * M_PI * i / (nsamples - 1));
+	}
+
+	v->plan = fftwf_plan_dft_r2c_1d(v->fft_len,
+	                                v->signal,
+	                                v->result,
+	                                FFTW_ESTIMATE);
+
+	v->stars = calloc(nstars, sizeof(Star));
+	assert(v->stars);
+
+	v->nstars = nstars;
+
+	for (size_t i = 0; i < nstars; i++) {
+		v->stars[i].speed_x = 0;
+		v->stars[i].speed_y = rand() % 3 + 1;
+		v->stars[i].xpos = rand() % wdw_width;
+		v->stars[i].ypos = rand() % wdw_height;
+		v->stars[i].size = rand() % 5;
+		v->stars[i].in_front = rand() % 2;
+		v->stars[i].phase = 0;
+		v->stars[i].phase_inc = rand() % 2 + 1;
+		v->stars[i].rotation = 0;
+		v->stars[i].rotation_inc = rand() % 2 + 1;
+		v->stars[i].visible = false;
+	}
+
+	return v;
+}
+
+static void
+Vis_Update(GLWindow_State* wdw)
+{
+	Vis_State* v = wdw->v;
+
+	if (wdw->ps->am->playing) {
+		Player_GetPlaybackData(wdw->ps, v->vis_buf, v->vis_len, true);
+
+		for (size_t i = 0; i < v->nsamples * 2; i += 2)
+			v->signal[i / 2] = (v->vis_buf[i] + v->vis_buf[i + 1]) / 2.f * v->window[i / 2];
+
+		fftwf_execute(v->plan);
+
+		v->mean_energy_band_div16 = 0;
+
+		for (size_t i = 0; i < v->fft_len; i++) {
+			float energy = sqrt(pow(v->result[i][0], 2) + pow(v->result[i][1], 2));
+
+			v->spectrum[i] = log10(energy);
+
+			if (i < v->fft_len / 16)
+				v->mean_energy_band_div16 += energy;
+		}
+
+		v->mean_energy_band_div16 /= v->fft_len / 16;
+	} else {
+		v->mean_energy_band_div16 = 0.f;
+	}
+}
+
+static void
+Vis_Destroy(Vis_State* v)
+{
+	assert(v);
+
+	fftwf_destroy_plan(v->plan);
+
+	free(v->vis_buf);
+	free(v->signal);
+	free(v->spectrum);
+	free(v->window);
+	free(v->result);
+	free(v->stars);
+	free(v);
+}
+
 static void
 GLUI_DrawStars(GLWindow_State* wdw, bool in_front)
 {
@@ -76,16 +183,6 @@ GLUI_DrawVis(GLWindow_State* wdw)
 {
 	Vis_State* v = wdw->v;
 	float scale = 1;
-
-	Player_GetPlaybackData(wdw->ps, v->vis_buf, v->vis_len, true);
-
-	for (size_t i = 0; i < v->nsamples * 2; i += 2)
-		v->signal[i / 2] = (v->vis_buf[i] + v->vis_buf[i + 1]) / 2.f * v->window[i / 2];
-
-	fftwf_execute(v->plan);
-
-	for (size_t i = 0; i < v->fft_len; i++)
-		v->spectrum[i] = log10(sqrt(pow(v->result[i][0], 2) + pow(v->result[i][1], 2)));
 
 	GLUI_DrawStars(wdw, false);
 
@@ -237,6 +334,7 @@ GLUI_Draw(GLWindow_State* wdw)
 
 	wdw->max_items = (wdw->height / (wdw->font->font_height * zoom)) - 6;
 
+	Vis_Update(wdw);
 	GLUI_DrawVis(wdw);
 
 	glColor4ub(GRAY(48, 64));
@@ -429,83 +527,6 @@ GLWindow_ProcessEvents(GLWindow_State* wdw, bool* got_input)
 	return true;
 }
 
-static Vis_State*
-Vis_Init(size_t wdw_width, size_t wdw_height, size_t nsamples, size_t nstars)
-{
-	Vis_State* v = (Vis_State*) calloc(1, sizeof(Vis_State));
-	assert(v);
-
-	v->fft_len = wdw_width;
-	v->nsamples = nsamples;
-
-	v->vis_len = wdw_width * 2;
-	v->vis_buf = (T*) calloc(v->vis_len, sizeof(T));
-	assert(v->vis_buf);
-
-	v->window = (float*) calloc(v->fft_len, sizeof(float));
-	assert(v->window);
-
-	v->signal = (float*) calloc(v->fft_len, sizeof(float));
-	assert(v->signal);
-
-	v->spectrum = (float*) calloc(v->fft_len, sizeof(float));
-	assert(v->spectrum);
-
-	v->result = (fftwf_complex*) calloc(v->fft_len, sizeof(fftwf_complex));
-	assert(v->result);
-
-	// Blackman-Nuttall window (B=1.9761), ~100dB sidelobe attenuation
-	// from Wikipedia
-
-	for (size_t i = 0; i < nsamples; i++) {
-		v->window[i] = 0.3635819 - 0.4891775 * cos(2 * M_PI * i / (nsamples - 1)) +
-		               0.1365995 * cos(4 * M_PI * i / (nsamples - 1)) -
-		               0.0106411 * cos(6 * M_PI * i / (nsamples - 1));
-	}
-
-	v->plan = fftwf_plan_dft_r2c_1d(v->fft_len,
-	                                v->signal,
-	                                v->result,
-	                                FFTW_ESTIMATE);
-
-	v->stars = calloc(nstars, sizeof(Star));
-	assert(v->stars);
-
-	v->nstars = nstars;
-
-	for (size_t i = 0; i < nstars; i++) {
-		v->stars[i].speed_x = 0;
-		v->stars[i].speed_y = rand() % 3 + 1;
-		v->stars[i].xpos = rand() % wdw_width;
-		v->stars[i].ypos = rand() % wdw_height;
-		v->stars[i].size = rand() % 5;
-		v->stars[i].in_front = rand() % 2;
-		v->stars[i].phase = 0;
-		v->stars[i].phase_inc = rand() % 2 + 1;
-		v->stars[i].rotation = 0;
-		v->stars[i].rotation_inc = rand() % 2 + 1;
-		v->stars[i].visible = false;
-	}
-
-	return v;
-}
-
-static void
-Vis_Destroy(Vis_State* v)
-{
-	assert(v);
-
-	fftwf_destroy_plan(v->plan);
-
-	free(v->vis_buf);
-	free(v->signal);
-	free(v->spectrum);
-	free(v->window);
-	free(v->result);
-	free(v->stars);
-	free(v);
-}
-
 void
 GLWindow_Destroy(GLWindow_State* wdw)
 {
@@ -540,6 +561,7 @@ GLWindow_Init(Options* opt, Player_State* ps)
 	gl_wdw->width = opt->wdw_width;
 	gl_wdw->height = opt->wdw_height;
 	gl_wdw->fps_limit = opt->fps_limit;
+	gl_wdw->font_shake_factor = opt->font_shake_factor;
 
 	SDL_GL_SetAttribute(SDL_GL_RED_SIZE, 5);
 	SDL_GL_SetAttribute(SDL_GL_GREEN_SIZE, 5);
