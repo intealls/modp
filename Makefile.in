@@ -109,11 +109,11 @@ am__dirstamp = $(am__leading_dot)dirstamp
 am_modp_OBJECTS = 3rdparty/hvl/hvl_replay.$(OBJEXT) \
 	3rdparty/libsidplayfp/libsidplayfp_wrap.$(OBJEXT) \
 	src/AudioManager.$(OBJEXT) src/Player.$(OBJEXT) \
-	src/OpenMPTRenderer.$(OBJEXT) src/HVLRenderer.$(OBJEXT) \
-	src/HCS64File.$(OBJEXT) src/LocalDir.$(OBJEXT) \
-	src/GMERenderer.$(OBJEXT) src/XMPRenderer.$(OBJEXT) \
-	src/SIDRenderer.$(OBJEXT) glui/GL.$(OBJEXT) \
-	glui/Font.$(OBJEXT) glui/Main.$(OBJEXT) \
+	src/OpenMPTRenderer.$(OBJEXT) src/Option.$(OBJEXT) \
+	src/HVLRenderer.$(OBJEXT) src/HCS64File.$(OBJEXT) \
+	src/LocalDir.$(OBJEXT) src/GMERenderer.$(OBJEXT) \
+	src/XMPRenderer.$(OBJEXT) src/SIDRenderer.$(OBJEXT) \
+	glui/GL.$(OBJEXT) glui/Font.$(OBJEXT) glui/Main.$(OBJEXT) \
 	glui/GLWindow.$(OBJEXT)
 modp_OBJECTS = $(am_modp_OBJECTS)
 modp_DEPENDENCIES =
@@ -139,8 +139,8 @@ am__depfiles_remade = 3rdparty/hvl/$(DEPDIR)/hvl_replay.Po \
 	src/$(DEPDIR)/AudioManager.Po src/$(DEPDIR)/GMERenderer.Po \
 	src/$(DEPDIR)/HCS64File.Po src/$(DEPDIR)/HVLRenderer.Po \
 	src/$(DEPDIR)/LocalDir.Po src/$(DEPDIR)/OpenMPTRenderer.Po \
-	src/$(DEPDIR)/Player.Po src/$(DEPDIR)/SIDRenderer.Po \
-	src/$(DEPDIR)/XMPRenderer.Po
+	src/$(DEPDIR)/Option.Po src/$(DEPDIR)/Player.Po \
+	src/$(DEPDIR)/SIDRenderer.Po src/$(DEPDIR)/XMPRenderer.Po
 am__mv = mv -f
 COMPILE = $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) \
 	$(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS)
@@ -333,7 +333,7 @@ AUTOMAKE_OPTIONS = foreign subdir-objects
 @DEBUG_TRUE@	-I3rdparty/libsidplayfp -g3 -O0 -fsanitize=address \
 @DEBUG_TRUE@	-Wall -Wextra -Wno-unused-function \
 @DEBUG_TRUE@	-Wno-overlength-strings $(am__append_2)
-modp_SOURCES = 3rdparty/hvl/hvl_replay.c 3rdparty/libsidplayfp/libsidplayfp_wrap.cpp src/AudioManager.c src/Player.c src/OpenMPTRenderer.c src/HVLRenderer.c src/HCS64File.c src/LocalDir.c src/GMERenderer.c src/XMPRenderer.c src/SIDRenderer.c glui/GL.c glui/Font.c glui/Main.c glui/GLWindow.c
+modp_SOURCES = 3rdparty/hvl/hvl_replay.c 3rdparty/libsidplayfp/libsidplayfp_wrap.cpp src/AudioManager.c src/Player.c src/OpenMPTRenderer.c src/Option.c src/HVLRenderer.c src/HCS64File.c src/LocalDir.c src/GMERenderer.c src/XMPRenderer.c src/SIDRenderer.c glui/GL.c glui/Font.c glui/Main.c glui/GLWindow.c
 modp_LDADD = -L/usr/local/lib/
 all: all-am
 
@@ -443,6 +443,8 @@ src/Player.$(OBJEXT): src/$(am__dirstamp) \
 	src/$(DEPDIR)/$(am__dirstamp)
 src/OpenMPTRenderer.$(OBJEXT): src/$(am__dirstamp) \
 	src/$(DEPDIR)/$(am__dirstamp)
+src/Option.$(OBJEXT): src/$(am__dirstamp) \
+	src/$(DEPDIR)/$(am__dirstamp)
 src/HVLRenderer.$(OBJEXT): src/$(am__dirstamp) \
 	src/$(DEPDIR)/$(am__dirstamp)
 src/HCS64File.$(OBJEXT): src/$(am__dirstamp) \
@@ -495,6 +497,7 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/HVLRenderer.Po@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/LocalDir.Po@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/OpenMPTRenderer.Po@am__quote@ # am--include-marker
+@AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/Option.Po@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/Player.Po@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/SIDRenderer.Po@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/XMPRenderer.Po@am__quote@ # am--include-marker
@@ -830,6 +833,7 @@ distclean: distclean-am
 	-rm -f src/$(DEPDIR)/HVLRenderer.Po
 	-rm -f src/$(DEPDIR)/LocalDir.Po
 	-rm -f src/$(DEPDIR)/OpenMPTRenderer.Po
+	-rm -f src/$(DEPDIR)/Option.Po
 	-rm -f src/$(DEPDIR)/Player.Po
 	-rm -f src/$(DEPDIR)/SIDRenderer.Po
 	-rm -f src/$(DEPDIR)/XMPRenderer.Po
@@ -892,6 +896,7 @@ maintainer-clean: maintainer-clean-am
 	-rm -f src/$(DEPDIR)/HVLRenderer.Po
 	-rm -f src/$(DEPDIR)/LocalDir.Po
 	-rm -f src/$(DEPDIR)/OpenMPTRenderer.Po
+	-rm -f src/$(DEPDIR)/Option.Po
 	-rm -f src/$(DEPDIR)/Player.Po
 	-rm -f src/$(DEPDIR)/SIDRenderer.Po
 	-rm -f src/$(DEPDIR)/XMPRenderer.Po
