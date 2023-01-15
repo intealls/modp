@@ -86,6 +86,8 @@ Vis_Update(GLWindow_State* wdw)
 {
 	Vis_State* v = wdw->v;
 
+	v->mean_energy_band_div16 = 0.f;
+
 	if (wdw->ps->am->playing) {
 		Player_GetPlaybackData(wdw->ps, v->vis_buf, v->vis_len, true);
 
@@ -93,8 +95,6 @@ Vis_Update(GLWindow_State* wdw)
 			v->signal[i / 2] = (v->vis_buf[i] + v->vis_buf[i + 1]) / 2.f * v->window[i / 2];
 
 		fftwf_execute(v->plan);
-
-		v->mean_energy_band_div16 = 0;
 
 		for (size_t i = 0; i < v->fft_len; i++) {
 			float energy = sqrt(pow(v->result[i][0], 2) + pow(v->result[i][1], 2));
@@ -106,8 +106,6 @@ Vis_Update(GLWindow_State* wdw)
 		}
 
 		v->mean_energy_band_div16 /= v->fft_len / 16;
-	} else {
-		v->mean_energy_band_div16 = 0.f;
 	}
 }
 
