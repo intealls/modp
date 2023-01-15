@@ -110,21 +110,21 @@ create_config(Option* option, size_t n_opts, const char* path)
 #endif
 
 	// expand "~"
-    wordexp_t exp_result;
-    wordexp(path, &exp_result, 0);
+	wordexp_t exp_result;
+	wordexp(path, &exp_result, 0);
 
-    result = memccpy(resolved_path, exp_result.we_wordv[0], '\0', _TINYDIR_PATH_MAX);
-    assert(result);
-    wordfree(&exp_result);
+	result = memccpy(resolved_path, exp_result.we_wordv[0], '\0', _TINYDIR_PATH_MAX);
+	assert(result);
+	wordfree(&exp_result);
 
-    // if no DIRSEP, prefix with "./"
-    result = strchr(resolved_path, DIRSEP);
-    if (result == NULL) {
-    	strncat(tmp, ".", sizeof(tmp) - 1);
-    	strncat(tmp, DIRSEP_STR, sizeof(tmp) - 2);
-    	strncat(tmp, resolved_path, sizeof(tmp) - strlen(tmp));
-    	memccpy(resolved_path, tmp, '\0', sizeof(resolved_path));
-    }
+	// if no DIRSEP, prefix with "./"
+	result = strchr(resolved_path, DIRSEP);
+	if (result == NULL) {
+		strncat(tmp, ".", sizeof(tmp) - 1);
+		strncat(tmp, DIRSEP_STR, sizeof(tmp) - 2);
+		strncat(tmp, resolved_path, sizeof(tmp) - strlen(tmp));
+		memccpy(resolved_path, tmp, '\0', sizeof(resolved_path));
+	}
 
 #if DEBUG
 	printf("after ~ and ./ expansion: %s\n", resolved_path);
@@ -141,8 +141,8 @@ create_config(Option* option, size_t n_opts, const char* path)
 
 	pos = resolved_path;
 
-    while (1) {
-    	memset(tmp, 0, sizeof(tmp));
+	while (1) {
+		memset(tmp, 0, sizeof(tmp));
 		pos = strchr(pos, DIRSEP);
 
 		if (pos == NULL)
@@ -160,20 +160,20 @@ create_config(Option* option, size_t n_opts, const char* path)
 
 		if (!result) {
 			if (stat(tmp, &st) == -1) {
-			    int status = mkdir(tmp, 0700);
-			    assert(status == 0);
-			    continue;
+				int status = mkdir(tmp, 0700);
+				assert(status == 0);
+				continue;
 			}
 		}
 
 		if (result == NULL)
 			break;
-    }
+	}
 
-    result = strncat(realpath_resolved_path, DIRSEP_STR, _TINYDIR_PATH_MAX - strlen(realpath_resolved_path));
-    assert(result);
-    result = strncat(realpath_resolved_path, filename, _TINYDIR_PATH_MAX - strlen(realpath_resolved_path));
-    assert(result);
+	result = strncat(realpath_resolved_path, DIRSEP_STR, _TINYDIR_PATH_MAX - strlen(realpath_resolved_path));
+	assert(result);
+	result = strncat(realpath_resolved_path, filename, _TINYDIR_PATH_MAX - strlen(realpath_resolved_path));
+	assert(result);
 
 	cfg_file = fopen(realpath_resolved_path, "w");
 	assert(cfg_file);
