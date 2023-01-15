@@ -366,6 +366,9 @@ GLWindow_HandleKeyDown(GLWindow_State* wdw, SDL_Keysym* keysym)
 			if (++wdw->vis == VIS_NONE)
 				wdw->vis = VIS_FFT;
 			break;
+		case SDLK_F6:
+			glClearColor((float)rand() / RAND_MAX, (float)rand() / RAND_MAX, (float)rand() / RAND_MAX, 0);
+			break;
 		case SDLK_r:
 			Player_PlayRandom(wdw->ps);
 			break;
