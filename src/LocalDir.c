@@ -11,6 +11,7 @@
 #include <tinydir.h>
 
 #include "Directory.h"
+#include "Globals.h"
 
 typedef struct LocalDir_Entry LocalDir_Entry;
 
@@ -35,15 +36,6 @@ typedef struct LocalDir_Data {
 	assert((a)); \
 	LocalDir_Entry* (b) = (a)->head; \
 	assert((b));
-
-#ifdef _WIN32
-#define DIRSEP '\\'
-#define DIRSEP_STR "\\"
-#define realpath(N,R) _fullpath((R),(N), _TINYDIR_PATH_MAX)
-#else
-#define DIRSEP '/'
-#define DIRSEP_STR "/"
-#endif
 
 static LocalDir_Entry*
 LocalDir_MakeEntry(const char* path);

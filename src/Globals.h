@@ -23,4 +23,13 @@
 		} \
 	} while (0)
 
+#ifdef _WIN32
+#define DIRSEP '\\'
+#define DIRSEP_STR "\\"
+#define realpath(N,R) _fullpath((R),(N), _TINYDIR_PATH_MAX)
+#else
+#define DIRSEP '/'
+#define DIRSEP_STR "/"
+#endif
+
 #endif /* GLOBALS_H_ */

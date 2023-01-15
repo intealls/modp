@@ -47,7 +47,12 @@ void
 Font_DrawString(GLWindow_State* wdw, const char* str, int x, int y, int zoom)
 {
 	int pos = 0;
+	float jit_factor = 0;
 	size_t line_breaks = 0;
+
+	Vis_State* v = wdw->v;
+
+	jit_factor = v->mean_energy_band_div16 / 65536.f;
 
 	GL_OrthoOn(wdw->width, wdw->height);
 
@@ -59,6 +64,9 @@ Font_DrawString(GLWindow_State* wdw, const char* str, int x, int y, int zoom)
 		glBegin(GL_QUADS);
 		{
 			while (*str != '\0') {
+				float rnd_x = ((((float)rand() / RAND_MAX) - 0.5) * jit_factor) * wdw->font_shake_factor;
+				float rnd_y = ((((float)rand() / RAND_MAX) - 0.5) * jit_factor) * wdw->font_shake_factor;
+
 				if (*str == '\\') {
 					if (hc_to_rgba((str + 1), wdw->font->color)) {
 #if DEBUG
@@ -83,26 +91,26 @@ Font_DrawString(GLWindow_State* wdw, const char* str, int x, int y, int zoom)
 				glColor4ub(0, 0, 0, 255);
 
 				glTexCoord2f(fw * (*str + 0) / tw, fh / th);
-				glVertex2i(      fw * pos * zoom + 2, -2);
+				glVertex2i(      fw * pos * zoom + 2 + rnd_x, -2 + rnd_y);
 				glTexCoord2f(fw * (*str + 1) / tw, fh / th);
-				glVertex2i(fw * (pos + 1) * zoom + 2, -2);
+				glVertex2i(fw * (pos + 1) * zoom + 2 + rnd_x, -2 + rnd_y);
 
 				glTexCoord2f(fw * (*str + 1) / tw, 0);
-				glVertex2i(fw * (pos + 1) * zoom + 2, fh * zoom - 2);
+				glVertex2i(fw * (pos + 1) * zoom + 2 + rnd_x, fh * zoom - 2 + rnd_y);
 				glTexCoord2f(fw * (*str + 0) / tw, 0);
-				glVertex2i(      fw * pos * zoom + 2, fh * zoom - 2);
+				glVertex2i(      fw * pos * zoom + 2 + rnd_x, fh * zoom - 2 + rnd_y);
 
 				glColor4ubv((const GLubyte*) wdw->font->color);
 
 				glTexCoord2f(fw * (*str + 0) / tw, fh / th);
-				glVertex2i(      fw * pos * zoom, 0);
+				glVertex2i(      fw * pos * zoom + rnd_x, 0 + rnd_y); // 0, 0
 				glTexCoord2f(fw * (*str + 1) / tw, fh / th);
-				glVertex2i(fw * (pos + 1) * zoom, 0);
+				glVertex2i(fw * (pos + 1) * zoom + rnd_x, 0 + rnd_y); // 1, 0
 
 				glTexCoord2f(fw * (*str + 1) / tw, 0);
-				glVertex2i(fw * (pos + 1) * zoom, fh * zoom);
+				glVertex2i(fw * (pos + 1) * zoom + rnd_x, fh * zoom + rnd_y); // 1, 1
 				glTexCoord2f(fw * (*str + 0) / tw, 0);
-				glVertex2i(      fw * pos * zoom, fh * zoom);
+				glVertex2i(      fw * pos * zoom + rnd_x, fh * zoom + rnd_y); // 0, 1
 
 				str++;
 				pos++;

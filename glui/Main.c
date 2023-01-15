@@ -13,120 +13,11 @@
 #include "Player.h"
 #include "Globals.h"
 #include "MinMax.h"
+#include "Option.h"
 
 #ifdef NDEBUG
 #error NDEBUG should not be defined
 #endif
-
-void
-Usage(Options* o, const char* name)
-{
-	fprintf(stdout,
-	        "\n%s [OPTIONS]\n\n"
-	        "-p    Initial path, default is \"%s\"\n"
-	        "-f    Path to a BDF font, default is an internal font\n"
-	        "-v    Pixel-double font vertically, default is %u\n"
-	        "-a    Auto increment at min length/song end, default is %u\n"
-	        "-n    Random song at auto increment, default is %u\n"
-	        "-m    Song minimum length, default is %" PRIu64 "\n"
-	        "-w    Window width, default is %" PRIu64 "\n"
-	        "-e    Window height, default is %" PRIu64 "\n"
-	        "-l    Framerate limit, default is %.2f\n"
-	        "-r    Background color red component, default is %.2f\n"
-	        "-g    Background color green component, default is %.2f\n"
-	        "-b    Background color blue component, default is %.2f\n\n"
-	        "-h    Show default command line options\n\n",
-	        name,
-	        o->path,
-	        o->font_dbl,
-	        o->auto_inc,
-	        o->auto_rnd,
-	        o->min_length,
-	        o->wdw_width,
-	        o->wdw_height,
-	        o->fps_limit,
-	        o->clr_r,
-	        o->clr_g,
-	        o->clr_b);
-}
-
-void
-ParseOptions(Options* o, int argc, char* argv[])
-{
-	int c, tmp;
-	while ((c = getopt(argc, argv, "p:f:v:a:n:m:w:e:l:r:g:b:")) != -1) {
-		switch (c) {
-			case 'p':
-				strcpy(o->path, optarg);
-				break;
-			case 'f':
-				strcpy(o->fontpath, optarg);
-				break;
-			case 'v':
-				if (sscanf(optarg, "%d", &tmp) != 1) goto error;
-				o->font_dbl = tmp ? true : false;
-				break;
-			case 'a':
-				if (sscanf(optarg, "%d", &tmp) != 1) goto error;
-				o->auto_inc = tmp ? true : false;
-				break;
-			case 'n':
-				if (sscanf(optarg, "%d", &tmp) != 1) goto error;
-				o->auto_rnd = tmp ? true : false;
-				break;
-			case 'm':
-				if (sscanf(optarg, "%d", &tmp) != 1) goto error;
-				o->min_length = tmp / 15 * 15;
-				o->min_length = min_int(o->min_length, 999 / 15 * 15);
-				break;
-			case 'w':
-				if (sscanf(optarg, "%d", &tmp) != 1) goto error;
-				o->wdw_width = (size_t) tmp;
-				o->wdw_width = min_int(max_int(o->wdw_width, 640), 3840);
-				break;
-			case 'e':
-				if (sscanf(optarg, "%d", &tmp) != 1) goto error;
-				o->wdw_height = (size_t) tmp;
-				o->wdw_height = min_int(max_int(o->wdw_height, 360), 2160);
-				break;
-			case 'l':
-				if (sscanf(optarg, "%f", &o->fps_limit) != 1) goto error;
-				o->fps_limit = min_float(max_float(o->fps_limit, 3), 240);
-				break;
-			case 'r':
-				if (sscanf(optarg, "%f", &o->clr_r) != 1) goto error;
-				o->clr_r = min_float(max_float(o->clr_r, 0.f), 1.f);
-				break;
-			case 'g':
-				if (sscanf(optarg, "%f", &o->clr_g) != 1) goto error;
-				o->clr_g = min_float(max_float(o->clr_g, 0.f), 1.f);
-				break;
-			case 'b':
-				if (sscanf(optarg, "%f", &o->clr_b) != 1) goto error;
-				o->clr_b = min_float(max_float(o->clr_b, 0.f), 1.f);
-				break;
-			default:
-				goto error;
-		}
-	}
-	return;
-error:
-	Usage(o, argv[0]);
-	exit(1);
-}
-
-int
-CheckOptions(int argc, char* argv[])
-{
-	for (int i = 0; i < argc; i++) {
-		if (strlen(argv[i]) >= _TINYDIR_PATH_MAX - 1)
-			return 1;
-		else if (strcmp(argv[i], "-h") == 0)
-			return 1;
-	}
-
-	return 0;
-}
 
 int
 main(int argc, char* argv[])
@@ -135,32 +26,155 @@ main(int argc, char* argv[])
 	Player_State* ps = NULL;
 	bool running = true;
 	Uint32 t_prev = 0;
+	Options o = { 0 };
 
-	Options opt = { .path = ".",
-	                .fontpath = "",
-	                .font_dbl = false,
-	                .wdw_width = 800,
-	                .wdw_height = 480,
-	                .auto_inc = true,
-	                .auto_rnd = false,
-	                .min_length = 0,
-	                .fps_limit = 60.f,
-	                .clr_r = 0.0f,
-	                .clr_g = 0.33f,
-	                .clr_b = 0.67f };
+	Option opt[] = { { .long_name = "path",
+	                   .description = "Initial path",
+	                   .type = OPT_STRING,
+	                   .has_arg = true,
+	                   .in_cfg_file = true,
+	                   .initial.str = ".",
+	                   .dest = &o.path },
+	                 { .long_name = "font",
+	                   .description = "Path to a BDF font",
+	                   .type = OPT_STRING,
+	                   .has_arg = true,
+	                   .in_cfg_file = true,
+	                   .initial.str = "",
+	                   .dest = &o.fontpath },
+	                 { .long_name = "cursor",
+	                   .description = "Path to a custom cursor",
+	                   .type = OPT_STRING,
+	                   .has_arg = true,
+	                   .in_cfg_file = true,
+	                   .initial.str = "",
+	                   .dest = &o.cursorpath },
+	                 { .long_name = "config",
+	                   .description = "Configuration file path",
+	                   .type = OPT_STRING,
+	                   .has_arg = true,
+	                   .in_cfg_file = false,
+	                   .initial.str = "~/.modp/modp.toml",
+	                   .dest = &o.cfgpath },
+	                 { .long_name = "createconfig",
+	                   .description = "Create configuration file in config path",
+	                   .type = OPT_NULL,
+	                   .has_arg = false,
+	                   .in_cfg_file = false,
+	                   .dest = NULL },
+	                 { .long_name = "showconfig",
+	                   .description = "Show current config",
+	                   .type = OPT_NULL,
+	                   .has_arg = false,
+	                   .in_cfg_file = false,
+	                   .dest = NULL },
+	                 { .long_name = "auto_increment",
+	                   .description = "Auto increment at min length/song end",
+	                   .type = OPT_BOOL,
+	                   .has_arg = true,
+	                   .in_cfg_file = true,
+	                   .initial.b = true,
+	                   .dest = &o.auto_inc },
+	                 { .long_name = "random_auto_increment",
+	                   .description = "Random song at auto increment",
+	                   .type = OPT_BOOL,
+	                   .has_arg = true,
+	                   .in_cfg_file = true,
+	                   .initial.b = false,
+	                   .dest = &o.auto_rnd },
+	                 { .long_name = "song_min_length",
+	                   .description = "Song minimum length",
+	                   .type = OPT_UINT,
+	                   .has_arg = true,
+	                   .in_cfg_file = true,
+	                   .initial.u = 0,
+	                   .min.u = 0,
+	                   .max.u = 999,
+	                   .dest = &o.min_length },
+	                 { .long_name = "width",
+	                   .description = "Window width",
+	                   .type = OPT_UINT,
+	                   .has_arg = true,
+	                   .in_cfg_file = true,
+	                   .initial.u = 800,
+	                   .min.u = 320,
+	                   .max.u = 1280,
+	                   .dest = &o.wdw_width },
+	                 { .long_name = "height",
+	                   .description = "Window height",
+	                   .type = OPT_UINT,
+	                   .has_arg = true,
+	                   .in_cfg_file = true,
+	                   .initial.u = 480,
+	                   .min.u = 240,
+	                   .max.u = 960,
+	                   .dest = &o.wdw_height },
+	                 { .long_name = "framelimit",
+	                   .description = "Framerate limit",
+	                   .type = OPT_FLOAT,
+	                   .has_arg = true,
+	                   .in_cfg_file = true,
+	                   .initial.f = 60,
+	                   .min.f = 1.f,
+	                   .max.f = 240.f,
+	                   .dest = &o.fps_limit },
+	                 { .long_name = "bg_red",
+	                   .description = "Background color red component",
+	                   .type = OPT_FLOAT,
+	                   .has_arg = true,
+	                   .in_cfg_file = true,
+	                   .initial.f = 0,
+	                   .min.f = 0.f,
+	                   .max.f = 1.f,
+	                   .dest = &o.clr_r },
+	                 { .long_name = "bg_green",
+	                   .description = "Background color green component",
+	                   .type = OPT_FLOAT,
+	                   .has_arg = true,
+	                   .in_cfg_file = true,
+	                   .initial.f = 0.33,
+	                   .min.f = 0.f,
+	                   .max.f = 1.f,
+	                   .dest = &o.clr_g },
+	                 { .long_name = "bg_blue",
+	                   .description = "Background color blue component",
+	                   .type = OPT_FLOAT,
+	                   .has_arg = true,
+	                   .in_cfg_file = true,
+	                   .initial.f = 0.67,
+	                   .min.f = 0.f,
+	                   .max.f = 1.f,
+	                   .dest = &o.clr_b },
+	                 { .long_name = "fontstretch",
+	                   .description = "Pixel double font vertically",
+	                   .type = OPT_BOOL,
+	                   .has_arg = true,
+	                   .in_cfg_file = true,
+	                   .initial.b = false,
+	                   .dest = &o.font_dbl },
+	                 { .long_name = "font_shake_factor",
+	                   .description = "Shake on-screen text in tune with music",
+	                   .type = OPT_FLOAT,
+	                   .has_arg = true,
+	                   .in_cfg_file = true,
+	                   .initial.f = 0.f,
+	                   .min.f = 0.f,
+	                   .max.f = 9000.f,
+	                   .dest = &o.font_shake_factor },
+	                 { .long_name = "help",
+	                   .description = "Display help",
+	                   .type = OPT_NULL,
+	                   .has_arg = false,
+	                   .in_cfg_file = false,
+	                   .dest = NULL } };
 
-	if (CheckOptions(argc, argv)) {
-		Usage(&opt, argv[0]);
-		exit(1);
-	}
+	Option_Init(argc, argv, opt, sizeof(opt) / sizeof(Option));
 
-	ParseOptions(&opt, argc, argv);
-
-	ps = Player_Init(48e3, 16, 2, opt.min_length,
-	                 opt.auto_inc, opt.auto_rnd, opt.path);
+	ps = Player_Init(48e3, 16, 2, o.min_length,
+	                 o.auto_inc, o.auto_rnd, o.path);
 	assert(ps);
 
-	wdw = GLWindow_Init(&opt, ps);
+	wdw = GLWindow_Init(&o, ps);
 	assert(wdw);
 
 	t_prev = SDL_GetTicks();
