@@ -14,5 +14,5 @@ AM_CXXFLAGS += -mwindows
 endif
 
 bin_PROGRAMS = modp
-modp_SOURCES = 3rdparty/hvl/hvl_replay.c 3rdparty/libsidplayfp/libsidplayfp_wrap.cpp src/AudioManager.c src/Player.c src/OpenMPTRenderer.c src/Option.c src/HVLRenderer.c src/HCS64File.c src/LocalDir.c src/GMERenderer.c src/XMPRenderer.c src/SIDRenderer.c glui/GL.c glui/Font.c glui/Main.c glui/GLWindow.c
+modp_SOURCES = 3rdparty/hvl/hvl_replay.c 3rdparty/libsidplayfp/libsidplayfp_wrap.cpp src/AudioManager.c src/Player.c src/OpenMPTRenderer.c src/Option.c src/HVLRenderer.c src/HCS64File.c src/LocalDir.c src/GMERenderer.c src/XMPRenderer.c src/SIDRenderer.c src/Utils.c glui/GL.c glui/Font.c glui/Main.c glui/GLWindow.c
 modp_LDADD = -L/usr/local/lib/
