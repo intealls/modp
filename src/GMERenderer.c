@@ -12,6 +12,7 @@
 #include "HCS64File.h"
 #include "GMERenderer.h"
 #include "Globals.h"
+#include "Utils.h"
 
 #define GME_TRACK_LENGTH 90000
 
@@ -81,10 +82,7 @@ load_song:
 	}
 
 	if (rndr_data->err == NULL)
-		assert(memccpy(rndr_data->title,
-		               filename,
-		               '\0',
-		               MODP_STR_LENGTH) != NULL);
+		StrCpy(rndr_data->title, MODP_STR_LENGTH, filename);
 
 	return GMERenderer_SetTrack(obj, 0);
 }
@@ -273,10 +271,7 @@ GMERenderer_SetTrack(const AudioRenderer* obj, int track)
 		songlen = strnlen(info->song, MODP_STR_LENGTH - 1);
 
 		if (songlen > 0)
-			assert(memccpy(rndr_data->title,
-			               info->song,
-			               '\0',
-			               MODP_STR_LENGTH) != NULL);
+			StrCpy(rndr_data->title, MODP_STR_LENGTH, info->song);
 
 error:
 		if (info != NULL)

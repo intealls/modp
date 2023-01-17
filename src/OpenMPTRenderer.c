@@ -13,6 +13,7 @@
 
 #include "OpenMPTRenderer.h"
 #include "Globals.h"
+#include "Utils.h"
 
 #define openmpt_probe    openmpt_probe_file_header
 #define openmpt_load     openmpt_module_create_from_memory2
@@ -93,7 +94,7 @@ OpenMPTRenderer_Load(const AudioRenderer* obj,
 
 	source = (openmpt_str != NULL && *openmpt_str) ? openmpt_str : filename;
 
-	assert(memccpy(rndr_data->title, source, '\0', MODP_STR_LENGTH) != NULL);
+	StrCpy(rndr_data->title, MODP_STR_LENGTH, source);
 
 	if (openmpt_str != NULL && *openmpt_str)
 		OpenMPTRenderer_UTF8ToISO8859_1(rndr_data->title);
@@ -103,12 +104,7 @@ OpenMPTRenderer_Load(const AudioRenderer* obj,
 	openmpt_str = openmpt_module_get_metadata(rndr_data->mod, "message");
 
 	if (openmpt_str != NULL && *openmpt_str) {
-		void* p = memccpy(rndr_data->info, openmpt_str,
-		                  '\0', MODP_STR_LENGTH);
-
-		if (p == NULL)
-			rndr_data->info[MODP_STR_LENGTH - 1] = '\0';
-
+		StrCpy(rndr_data->info, MODP_STR_LENGTH, openmpt_str);
 		OpenMPTRenderer_UTF8ToISO8859_1(rndr_data->info);
 	}
 

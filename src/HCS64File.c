@@ -16,6 +16,7 @@
 #include <tinydir.h>
 
 #include "Globals.h"
+#include "Utils.h"
 
 typedef struct M3UEntry {
 	bool use;
@@ -67,7 +68,7 @@ AddM3UEntry(M3UEntries* ents,
 
 	entry = &(ents->list[ents->n]);
 
-	assert(memccpy(entry->name, name, '\0', _TINYDIR_PATH_MAX) != NULL);
+	StrCpy(entry->name, _TINYDIR_PATH_MAX, name);
 
 	entry->use = false;
 	entry->data = data;
@@ -265,7 +266,7 @@ TryOpenHCS64(const void* data,
 			*song_len = len;
 			archive_read_data(a, *song, *song_len);
 
-			assert(memccpy(song_fname, name, '\0', _TINYDIR_PATH_MAX) != NULL);
+			StrCpy(song_fname, _TINYDIR_PATH_MAX, name);
 
 			got_song = true;
 		} else if (HasExtension(name, "m3u")) {

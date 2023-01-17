@@ -11,6 +11,7 @@
 #include "../3rdparty/libsidplayfp/libsidplayfp_wrap.h"
 #include "SIDRenderer.h"
 #include "Globals.h"
+#include "Utils.h"
 
 typedef struct SIDRenderer_Data {
 	struct ReSIDfpBuilder* resid_builder;
@@ -65,7 +66,7 @@ SIDRenderer_Load(const AudioRenderer* obj,
 	}
 
 	rndr_data->songs = songsSidTune(rndr_data->sid_tune);
-	assert(memccpy(rndr_data->title, filename, '\0', MODP_STR_LENGTH) != NULL);
+	StrCpy(rndr_data->title, MODP_STR_LENGTH, filename);
 	return SIDRenderer_SetTrack(obj, 0);
 }
 
@@ -219,7 +220,7 @@ SIDRenderer_SetTrack(const AudioRenderer* obj, int track)
 			const char* info_str = infoStringSidTune(rndr_data->sid_tune, i);
 			switch (i) {
 				case 0: info_prefix = "Title: ";
-						memccpy(rndr_data->title, info_str, '\0', MODP_STR_LENGTH);
+						StrCpy(rndr_data->title, MODP_STR_LENGTH, info_str);
 						break;
 				case 1: info_prefix = "Author: ";
 						break;

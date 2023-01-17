@@ -47,7 +47,7 @@ LocalDir_StrCpy(char dest[_TINYDIR_PATH_MAX],
 	char* d_len_p = NULL;
 
 	d_len_p = (char*) memccpy(dest, src, '\0', _TINYDIR_PATH_MAX);
-	assert(d_len_p != NULL);
+	assert(d_len_p - dest < _TINYDIR_PATH_MAX);
 
 	return d_len_p - dest - 1;
 }
