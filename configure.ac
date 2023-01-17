@@ -75,8 +75,6 @@ AC_TYPE_UINT32_T
 # Checks for library functions.
 AC_FUNC_ERROR_AT_LINE
 AC_FUNC_LSTAT_FOLLOWS_SLASHED_SYMLINK
-AC_FUNC_MALLOC
-AC_FUNC_REALLOC
 AC_FUNC_STRNLEN
 AC_CHECK_FUNCS([memmove memset pow realpath select sqrt strchr strncasecmp strrchr])
 
