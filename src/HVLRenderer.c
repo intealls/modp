@@ -8,6 +8,7 @@
 #include "../3rdparty/hvl/hvl_replay.h"
 #include "HVLRenderer.h"
 #include "Globals.h"
+#include "Utils.h"
 
 #define HVL_FREQ 48000
 #define HIVELY_LEN HVL_FREQ/50
@@ -70,7 +71,7 @@ HVLRenderer_Load(const AudioRenderer* obj,
 	};
 
 	strcat(rndr_data->info, "\0");
-	assert(memccpy(rndr_data->title, source, '\0', MODP_STR_LENGTH) != NULL);
+	StrCpy(rndr_data->title, MODP_STR_LENGTH, source);
 
 	/* inelegantly get the song length,
        this should probably be part of hvl_replay instead

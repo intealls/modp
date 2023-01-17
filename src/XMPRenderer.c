@@ -12,6 +12,7 @@
 
 #include "XMPRenderer.h"
 #include "Globals.h"
+#include "Utils.h"
 
 typedef struct XMPRenderer_Data {
 	char title[MODP_STR_LENGTH];
@@ -48,8 +49,7 @@ XMPRenderer_Load(const AudioRenderer* obj,
 
 	xmp_get_module_info(rndr_data->ctx, &rndr_data->mod);
 
-	assert(memccpy(rndr_data->title,
-	               rndr_data->mod.mod->name, '\0', MODP_STR_LENGTH));
+	StrCpy(rndr_data->title, MODP_STR_LENGTH, rndr_data->mod.mod->name);
 
 	for (int i = 0; i < rndr_data->mod.mod->ins; i++) {
 		char* ins_name = rndr_data->mod.mod->xxi[i].name;
@@ -61,8 +61,7 @@ XMPRenderer_Load(const AudioRenderer* obj,
 		if (info_copied + ins_len + 1 >= MODP_STR_LENGTH)
 			break;
 
-		assert(memccpy(info_ptr + info_copied,
-		               ins_name, '\0', MODP_STR_LENGTH - info_copied));
+		StrCpy(info_ptr + info_copied, MODP_STR_LENGTH - info_copied, ins_name);
 
 		info_copied += ins_len + 1;
 

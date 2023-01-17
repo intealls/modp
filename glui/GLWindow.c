@@ -19,6 +19,7 @@
 #include "GLColors.h"
 #include "Player.h"
 #include "Globals.h"
+#include "Utils.h"
 
 static Vis_State*
 Vis_Init(size_t wdw_width, size_t wdw_height, size_t nsamples, size_t nstars)
@@ -290,7 +291,7 @@ GLUI_DrawSongInfo(GLWindow_State* wdw, int y, int title_zoom, int info_zoom)
 		Font_DrawString(wdw, info, 0, y - (wdw->font->font_height * (title_zoom + info_zoom)), info_zoom);
 
 	if (title != NULL) {
-		assert(memccpy(tmp, title, '\0', MODP_STR_LENGTH) != NULL);
+		StrCpy(tmp, MODP_STR_LENGTH, title);
 
 		size_t maxchar = wdw->width / (wdw->font->font_width * 3) - 14; // ...00:00/00:00
 

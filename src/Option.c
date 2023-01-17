@@ -15,6 +15,7 @@
 
 #include "Option.h"
 #include "Globals.h"
+#include "Utils.h"
 
 static void
 print_value_description(Option* opt)
@@ -113,8 +114,7 @@ create_config(Option* option, size_t n_opts, const char* path)
 	wordexp_t exp_result;
 	wordexp(path, &exp_result, 0);
 
-	result = memccpy(resolved_path, exp_result.we_wordv[0], '\0', _TINYDIR_PATH_MAX);
-	assert(result);
+	StrCpy(resolved_path, _TINYDIR_PATH_MAX, exp_result.we_wordv[0]);
 	wordfree(&exp_result);
 
 	// if no DIRSEP, prefix with "./"
@@ -122,8 +122,8 @@ create_config(Option* option, size_t n_opts, const char* path)
 	if (result == NULL) {
 		strncat(tmp, ".", sizeof(tmp) - 1);
 		strncat(tmp, DIRSEP_STR, sizeof(tmp) - 2);
-		strncat(tmp, resolved_path, sizeof(tmp) - strlen(tmp));
-		memccpy(resolved_path, tmp, '\0', sizeof(resolved_path));
+		strncat(tmp, resolved_path, sizeof(tmp) - strlen(tmp) - 1);
+		StrCpy(resolved_path, sizeof(resolved_path), tmp);
 	}
 
 #if DEBUG
@@ -170,9 +170,9 @@ create_config(Option* option, size_t n_opts, const char* path)
 			break;
 	}
 
-	result = strncat(realpath_resolved_path, DIRSEP_STR, _TINYDIR_PATH_MAX - strlen(realpath_resolved_path));
+	result = strncat(realpath_resolved_path, DIRSEP_STR, _TINYDIR_PATH_MAX - strlen(realpath_resolved_path) - 1);
 	assert(result);
-	result = strncat(realpath_resolved_path, filename, _TINYDIR_PATH_MAX - strlen(realpath_resolved_path));
+	result = strncat(realpath_resolved_path, filename, _TINYDIR_PATH_MAX - strlen(realpath_resolved_path) - 1);
 	assert(result);
 
 	cfg_file = fopen(realpath_resolved_path, "w");
@@ -197,8 +197,7 @@ set_dest_from_value(Option* option, void* value)
 		float tmp_float;
 
 		case OPT_STRING:
-			tmp_str = memccpy((char*) option->dest, (char*) value, '\0', _TINYDIR_PATH_MAX);
-			assert(tmp_str);
+			StrCpy((char*) option->dest, _TINYDIR_PATH_MAX, (char*) value);
 			break;
 		case OPT_BOOL:
 			*((bool*) option->dest) = *((bool*) value);
