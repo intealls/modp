@@ -9,9 +9,10 @@
 #include <getopt.h>
 #include <ctype.h>
 #include <assert.h>
-#include <pwd.h>
 #include <unistd.h>
+#ifndef _WIN32
 #include <wordexp.h>
+#endif
 
 #include "Option.h"
 #include "Globals.h"
@@ -110,12 +111,16 @@ create_config(Option* option, size_t n_opts, const char* path)
 	printf("incoming: %s\n", path);
 #endif
 
+#ifndef _WIN32
 	// expand "~"
 	wordexp_t exp_result;
 	wordexp(path, &exp_result, 0);
 
 	StrCpy(resolved_path, _TINYDIR_PATH_MAX, exp_result.we_wordv[0]);
 	wordfree(&exp_result);
+#else
+	StrCpy(resolved_path, _TINYDIR_PATH_MAX, path);
+#endif
 
 	// if no DIRSEP, prefix with "./"
 	result = strchr(resolved_path, DIRSEP);
@@ -158,20 +163,24 @@ create_config(Option* option, size_t n_opts, const char* path)
 		printf("realpath_resolved_path: %s\n", realpath_resolved_path);
 #endif
 
-		if (!result) {
-			if (stat(tmp, &st) == -1) {
-				int status = mkdir(tmp, 0700);
-				assert(status == 0);
-				continue;
-			}
+		if (stat(tmp, &st) == -1) {
+#ifndef _WIN32
+			int status = mkdir(tmp, 0700);
+#else
+			int status = mkdir(tmp);
+#endif
+			assert(status == 0);
+			continue;
 		}
 
 		if (result == NULL)
 			break;
 	}
 
+#ifndef _WIN32
 	result = strncat(realpath_resolved_path, DIRSEP_STR, _TINYDIR_PATH_MAX - strlen(realpath_resolved_path) - 1);
 	assert(result);
+#endif
 	result = strncat(realpath_resolved_path, filename, _TINYDIR_PATH_MAX - strlen(realpath_resolved_path) - 1);
 	assert(result);
 

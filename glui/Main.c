@@ -54,7 +54,11 @@ main(int argc, char* argv[])
 	                   .type = OPT_STRING,
 	                   .has_arg = true,
 	                   .in_cfg_file = false,
+#ifndef _WIN32
 	                   .initial.str = "~/.modp/modp.toml",
+#else
+	                   .initial.str = "modp.toml",
+#endif
 	                   .dest = &o.cfgpath },
 	                 { .long_name = "createconfig",
 	                   .description = "Create configuration file in config path",
