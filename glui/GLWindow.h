@@ -33,6 +33,7 @@ typedef struct Options {
 	float clr_g;
 	float clr_b;
 	float font_shake_factor;
+	float font_zoom_factor;
 } Options;
 
 typedef struct Star {
@@ -80,6 +81,7 @@ struct GLWindow_State {
 	Player_State* ps;
 
 	float font_shake_factor;
+	float font_zoom_factor;
 };
 
 bool            GLWindow_ProcessEvents(GLWindow_State*, bool*);
