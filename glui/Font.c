@@ -87,30 +87,31 @@ Font_DrawString(GLWindow_State* wdw, const char* str, int x, int y, int zoom)
 				float fh = wdw->font->font_height;
 				float tw = wdw->font->tex_width;
 				float th = wdw->font->tex_height;
+				float zoom_x = zoom * ((((float)rand() / RAND_MAX)) * jit_factor) * wdw->font_zoom_factor;
 
 				glColor4ub(0, 0, 0, 255);
 
 				glTexCoord2f(fw * (*str + 0) / tw, fh / th);
-				glVertex2i(      fw * pos * zoom + 2 + rnd_x, -2 + rnd_y);
+				glVertex2i(      fw * pos * zoom + 2 + rnd_x - zoom_x, -2 + rnd_y - zoom_x); // 0, 0
 				glTexCoord2f(fw * (*str + 1) / tw, fh / th);
-				glVertex2i(fw * (pos + 1) * zoom + 2 + rnd_x, -2 + rnd_y);
+				glVertex2i(fw * (pos + 1) * zoom + 2 + rnd_x + zoom_x, -2 + rnd_y - zoom_x); // 1, 0
 
 				glTexCoord2f(fw * (*str + 1) / tw, 0);
-				glVertex2i(fw * (pos + 1) * zoom + 2 + rnd_x, fh * zoom - 2 + rnd_y);
+				glVertex2i(fw * (pos + 1) * zoom + 2 + rnd_x + zoom_x, fh * zoom - 2 + rnd_y + zoom_x); // 1, 1
 				glTexCoord2f(fw * (*str + 0) / tw, 0);
-				glVertex2i(      fw * pos * zoom + 2 + rnd_x, fh * zoom - 2 + rnd_y);
+				glVertex2i(      fw * pos * zoom + 2 + rnd_x - zoom_x, fh * zoom - 2 + rnd_y + zoom_x); // 0, 1
 
 				glColor4ubv((const GLubyte*) wdw->font->color);
 
 				glTexCoord2f(fw * (*str + 0) / tw, fh / th);
-				glVertex2i(      fw * pos * zoom + rnd_x, 0 + rnd_y); // 0, 0
+				glVertex2i(      fw * pos * zoom + rnd_x - zoom_x, rnd_y - zoom_x); // 0, 0
 				glTexCoord2f(fw * (*str + 1) / tw, fh / th);
-				glVertex2i(fw * (pos + 1) * zoom + rnd_x, 0 + rnd_y); // 1, 0
+				glVertex2i(fw * (pos + 1) * zoom + rnd_x + zoom_x, rnd_y - zoom_x); // 1, 0
 
 				glTexCoord2f(fw * (*str + 1) / tw, 0);
-				glVertex2i(fw * (pos + 1) * zoom + rnd_x, fh * zoom + rnd_y); // 1, 1
+				glVertex2i(fw * (pos + 1) * zoom + rnd_x + zoom_x, fh * zoom + rnd_y + zoom_x); // 1, 1
 				glTexCoord2f(fw * (*str + 0) / tw, 0);
-				glVertex2i(      fw * pos * zoom + rnd_x, fh * zoom + rnd_y); // 0, 1
+				glVertex2i(      fw * pos * zoom + rnd_x - zoom_x, fh * zoom + rnd_y + zoom_x); // 0, 1
 
 				str++;
 				pos++;

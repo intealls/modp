@@ -561,6 +561,7 @@ GLWindow_Init(Options* opt, Player_State* ps)
 	gl_wdw->height = opt->wdw_height;
 	gl_wdw->fps_limit = opt->fps_limit;
 	gl_wdw->font_shake_factor = opt->font_shake_factor;
+	gl_wdw->font_zoom_factor = opt->font_zoom_factor;
 
 	SDL_GL_SetAttribute(SDL_GL_RED_SIZE, 5);
 	SDL_GL_SetAttribute(SDL_GL_GREEN_SIZE, 5);
