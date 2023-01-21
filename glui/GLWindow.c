@@ -102,7 +102,7 @@ Vis_Update(GLWindow_State* wdw)
 
 			v->spectrum[i] = log10(energy);
 
-			if (i < v->fft_len / 16)
+			if (i > 16 && i < (v->fft_len / 16) + 16)
 				v->mean_energy_band_div16 += energy;
 		}
 
@@ -336,6 +336,11 @@ GLUI_Draw(GLWindow_State* wdw)
 	Vis_Update(wdw);
 	GLUI_DrawVis(wdw);
 
+	float boost = wdw->v->mean_energy_band_div16 / (65536.f * 8.f) * wdw->bg_flash_factor;
+	boost *= boost;
+
+	glClearColor(wdw->clrcolor[0] + boost, wdw->clrcolor[1] + boost, wdw->clrcolor[2] + boost, 0.f);
+
 	glColor4ub(GRAY(48, 64));
 	GL_DrawRec(0, y, wdw->width, wdw->font->font_height * zoom * wdw->max_items, true, wdw->width, wdw->height);
 
@@ -464,7 +469,9 @@ GLWindow_HandleKeyDown(GLWindow_State* wdw, SDL_Keysym* keysym)
 				wdw->vis = VIS_FFT;
 			break;
 		case SDLK_F6:
-			glClearColor((float)rand() / RAND_MAX, (float)rand() / RAND_MAX, (float)rand() / RAND_MAX, 0);
+			wdw->clrcolor[0] = (float)rand() / RAND_MAX;
+			wdw->clrcolor[1] = (float)rand() / RAND_MAX;
+			wdw->clrcolor[2] = (float)rand() / RAND_MAX;
 			break;
 		case SDLK_r:
 			Player_PlayRandom(wdw->ps);
@@ -562,6 +569,11 @@ GLWindow_Init(Options* opt, Player_State* ps)
 	gl_wdw->fps_limit = opt->fps_limit;
 	gl_wdw->font_shake_factor = opt->font_shake_factor;
 	gl_wdw->font_zoom_factor = opt->font_zoom_factor;
+	gl_wdw->bg_flash_factor = opt->bg_flash_factor;
+
+	gl_wdw->clrcolor[0] = opt->clr_r;
+	gl_wdw->clrcolor[1] = opt->clr_g;
+	gl_wdw->clrcolor[2] = opt->clr_b;
 
 	SDL_GL_SetAttribute(SDL_GL_RED_SIZE, 5);
 	SDL_GL_SetAttribute(SDL_GL_GREEN_SIZE, 5);
@@ -580,7 +592,7 @@ GLWindow_Init(Options* opt, Player_State* ps)
 
 	GL_Init(gl_wdw->width,
 	        gl_wdw->height,
-	        opt->clr_r, opt->clr_g, opt->clr_b);
+	        gl_wdw->clrcolor[0], gl_wdw->clrcolor[1], gl_wdw->clrcolor[2]);
 
 	SDL_ShowCursor(1);
 
