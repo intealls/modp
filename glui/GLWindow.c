@@ -540,10 +540,40 @@ GLWindow_Destroy(GLWindow_State* wdw)
 
 	Vis_Destroy(wdw->v);
 	Font_Destroy(wdw->font);
+	SDL_FreeCursor(wdw->sdl_cur);
 
 	free(wdw);
 
 	SDL_Quit();
+}
+
+void
+GLUI_SetCursor(SDL_Cursor* cursor, char* filename) {
+    SDL_Surface* cursor_surface;
+    SDL_Surface* temp_surface;
+
+    temp_surface = IMG_Load(filename);
+    if (!temp_surface) {
+        return;
+    }
+    cursor_surface = SDL_CreateRGBSurfaceWithFormat(
+        0,
+        32,
+        32,
+        temp_surface->format->BitsPerPixel,
+        temp_surface->format->format
+    );
+
+    SDL_BlitScaled(temp_surface, NULL, cursor_surface, NULL);
+    cursor = SDL_CreateColorCursor(cursor_surface, 0, 0);
+    if (!cursor) {
+        SDL_Log("failed to create cursor from %s: %s", filename, SDL_GetError());
+        return;
+    }
+
+    SDL_SetCursor(cursor);
+    SDL_FreeSurface(temp_surface);
+    SDL_FreeSurface(cursor_surface);
 }
 
 GLWindow_State*
@@ -552,6 +582,7 @@ GLWindow_Init(Options* opt, Player_State* ps)
 	SDL_Window* sdl_wdw;
 	GLWindow_State* gl_wdw;
 	Vis_State* v;
+	SDL_Cursor* sdl_cur;
 
 	gl_wdw = (GLWindow_State*) calloc(1, sizeof(GLWindow_State));
 	assert(gl_wdw);
@@ -559,7 +590,7 @@ GLWindow_Init(Options* opt, Player_State* ps)
 	gl_wdw->ps = ps;
 
 	if (SDL_Init(SDL_INIT_VIDEO) < 0) {
-		fprintf(stderr, "Video initialization failed: %s\n", SDL_GetError());
+		SDL_Log("Video initialization failed: %s", SDL_GetError());
 		free(gl_wdw);
 		return NULL;
 	}
