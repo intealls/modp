@@ -1,6 +1,8 @@
 // Copyright: intealls
 // Licence: GPL v3
 
+#include <SDL2/SDL_assert.h>
+#include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
@@ -13,10 +15,12 @@
 #ifndef _WIN32
 #include <wordexp.h>
 #endif
+#include <SDL2/SDL_log.h>
 
 #include "Option.h"
 #include "Globals.h"
 #include "Utils.h"
+
 
 static void
 print_value_description(Option* opt)
@@ -132,7 +136,7 @@ create_config(Option* option, size_t n_opts, const char* path)
 	}
 
 #if DEBUG
-	printf("after ~ and ./ expansion: %s\n", resolved_path);
+	SDL_LogDebug(SDL_LOG_CATEGORY_SYSTEM, "after ~ and ./ expansion: %s\n", resolved_path);
 #endif
 
 	result = strrchr(resolved_path, DIRSEP);
@@ -141,7 +145,7 @@ create_config(Option* option, size_t n_opts, const char* path)
 	assert(strlen(filename));
 
 #if DEBUG
-	printf("filename: %s\n", filename);
+	SDL_LogDebug(SDL_LOG_CATEGORY_SYSTEM, "filename: %s\n", filename);
 #endif
 
 	pos = resolved_path;
@@ -159,8 +163,8 @@ create_config(Option* option, size_t n_opts, const char* path)
 		result = realpath(tmp, realpath_resolved_path);
 
 #if DEBUG
-		printf("tmp: %s\n", tmp);
-		printf("realpath_resolved_path: %s\n", realpath_resolved_path);
+		SDL_LogDebug(SDL_LOG_CATEGORY_SYSTEM, "tmp: %s\n", tmp);
+		SDL_LogDebug(SDL_LOG_CATEGORY_SYSTEM, "realpath_resolved_path: %s\n", realpath_resolved_path);
 #endif
 
 		if (stat(tmp, &st) == -1) {
@@ -192,7 +196,7 @@ create_config(Option* option, size_t n_opts, const char* path)
 
 	fclose(cfg_file);
 
-	printf("Created configuration file at %s\n", realpath_resolved_path);
+	SDL_Log("Created configuration file at %s\n", realpath_resolved_path);
 
 	return 0;
 }

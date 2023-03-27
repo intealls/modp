@@ -68,6 +68,7 @@ typedef enum Vis { VIS_FFT = 0, VIS_SCOPE = 1, VIS_NONE = 2 } Vis;
 
 struct GLWindow_State {
 	SDL_Window* sdl_wdw;
+	SDL_Cursor* sdl_cur;
 	Vis vis;
 	Vis_State* v;
 
