@@ -106,7 +106,8 @@ CONFIG_CLEAN_VPATH_FILES =
 am__installdirs = "$(DESTDIR)$(bindir)"
 PROGRAMS = $(bin_PROGRAMS)
 am__dirstamp = $(am__leading_dot)dirstamp
-am_modp_OBJECTS = 3rdparty/hvl/hvl_replay.$(OBJEXT) \
+am_modp_OBJECTS = deps/tomlc99/toml.$(OBJEXT) \
+	3rdparty/hvl/hvl_replay.$(OBJEXT) \
 	3rdparty/libsidplayfp/libsidplayfp_wrap.$(OBJEXT) \
 	src/AudioManager.$(OBJEXT) src/Player.$(OBJEXT) \
 	src/OpenMPTRenderer.$(OBJEXT) src/Option.$(OBJEXT) \
@@ -134,14 +135,14 @@ depcomp = $(SHELL) $(top_srcdir)/depcomp
 am__maybe_remake_depfiles = depfiles
 am__depfiles_remade = 3rdparty/hvl/$(DEPDIR)/hvl_replay.Po \
 	3rdparty/libsidplayfp/$(DEPDIR)/libsidplayfp_wrap.Po \
-	glui/$(DEPDIR)/Font.Po glui/$(DEPDIR)/GL.Po \
-	glui/$(DEPDIR)/GLWindow.Po glui/$(DEPDIR)/Main.Po \
-	src/$(DEPDIR)/AudioManager.Po src/$(DEPDIR)/GMERenderer.Po \
-	src/$(DEPDIR)/HCS64File.Po src/$(DEPDIR)/HVLRenderer.Po \
-	src/$(DEPDIR)/LocalDir.Po src/$(DEPDIR)/OpenMPTRenderer.Po \
-	src/$(DEPDIR)/Option.Po src/$(DEPDIR)/Player.Po \
-	src/$(DEPDIR)/SIDRenderer.Po src/$(DEPDIR)/Utils.Po \
-	src/$(DEPDIR)/XMPRenderer.Po
+	deps/tomlc99/$(DEPDIR)/toml.Po glui/$(DEPDIR)/Font.Po \
+	glui/$(DEPDIR)/GL.Po glui/$(DEPDIR)/GLWindow.Po \
+	glui/$(DEPDIR)/Main.Po src/$(DEPDIR)/AudioManager.Po \
+	src/$(DEPDIR)/GMERenderer.Po src/$(DEPDIR)/HCS64File.Po \
+	src/$(DEPDIR)/HVLRenderer.Po src/$(DEPDIR)/LocalDir.Po \
+	src/$(DEPDIR)/OpenMPTRenderer.Po src/$(DEPDIR)/Option.Po \
+	src/$(DEPDIR)/Player.Po src/$(DEPDIR)/SIDRenderer.Po \
+	src/$(DEPDIR)/Utils.Po src/$(DEPDIR)/XMPRenderer.Po
 am__mv = mv -f
 COMPILE = $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) \
 	$(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS)
@@ -315,26 +316,29 @@ top_build_prefix = @top_build_prefix@
 top_builddir = @top_builddir@
 top_srcdir = @top_srcdir@
 AUTOMAKE_OPTIONS = foreign subdir-objects
-@DEBUG_FALSE@AM_CFLAGS = -Isrc -Iglui -Ideps/tinydir -I3rdparty/hvl \
-@DEBUG_FALSE@	-I3rdparty/libsidplayfp -fno-omit-frame-pointer \
-@DEBUG_FALSE@	-O2 -Wall -Wextra -Wno-unused-function \
-@DEBUG_FALSE@	-Wno-overlength-strings -std=c11 \
-@DEBUG_FALSE@	-D_USE_MATH_DEFINES -D_DEFAULT_SOURCE \
+@DEBUG_FALSE@AM_CFLAGS = -Isrc -Iglui -Ideps/tinydir -Ideps/tomlc99 \
+@DEBUG_FALSE@	-I3rdparty/hvl -I3rdparty/libsidplayfp \
+@DEBUG_FALSE@	-fno-omit-frame-pointer -O2 -Wall -Wextra \
+@DEBUG_FALSE@	-Wno-unused-function -Wno-overlength-strings \
+@DEBUG_FALSE@	-std=c11 -D_USE_MATH_DEFINES -D_DEFAULT_SOURCE \
 @DEBUG_FALSE@	$(am__append_1)
-@DEBUG_TRUE@AM_CFLAGS = -Isrc -Iglui -Ideps/tinydir -I3rdparty/hvl \
-@DEBUG_TRUE@	-I3rdparty/libsidplayfp -g3 -O0 -fsanitize=address \
-@DEBUG_TRUE@	-Wall -Wextra -Wno-unused-function \
-@DEBUG_TRUE@	-Wno-overlength-strings $(am__append_1)
-@DEBUG_FALSE@AM_CXXFLAGS = -Isrc -Iglui -Ideps/tinydir -I3rdparty/hvl \
-@DEBUG_FALSE@	-I3rdparty/libsidplayfp -fno-omit-frame-pointer \
-@DEBUG_FALSE@	-O2 -pedantic -Wall -Wextra -Wno-unused-function \
+@DEBUG_TRUE@AM_CFLAGS = -Isrc -Iglui -Ideps/tinydir -Ideps/tomlc99 \
+@DEBUG_TRUE@	-I3rdparty/hvl -I3rdparty/libsidplayfp -g3 -O0 \
+@DEBUG_TRUE@	-fsanitize=address -Wall -Wextra \
+@DEBUG_TRUE@	-Wno-unused-function -Wno-overlength-strings \
+@DEBUG_TRUE@	$(am__append_1)
+@DEBUG_FALSE@AM_CXXFLAGS = -Isrc -Iglui -Ideps/tinydir -Ideps/tomlc99 \
+@DEBUG_FALSE@	-I3rdparty/hvl -I3rdparty/libsidplayfp \
+@DEBUG_FALSE@	-fno-omit-frame-pointer -O2 -pedantic -Wall \
+@DEBUG_FALSE@	-Wextra -Wno-unused-function \
 @DEBUG_FALSE@	-Wno-overlength-strings -D_USE_MATH_DEFINES \
 @DEBUG_FALSE@	-D_DEFAULT_SOURCE $(am__append_2)
-@DEBUG_TRUE@AM_CXXFLAGS = -Isrc -Iglui -Ideps/tinydir -I3rdparty/hvl \
-@DEBUG_TRUE@	-I3rdparty/libsidplayfp -g3 -O0 -fsanitize=address \
-@DEBUG_TRUE@	-Wall -Wextra -Wno-unused-function \
-@DEBUG_TRUE@	-Wno-overlength-strings $(am__append_2)
-modp_SOURCES = 3rdparty/hvl/hvl_replay.c 3rdparty/libsidplayfp/libsidplayfp_wrap.cpp src/AudioManager.c src/Player.c src/OpenMPTRenderer.c src/Option.c src/HVLRenderer.c src/HCS64File.c src/LocalDir.c src/GMERenderer.c src/XMPRenderer.c src/SIDRenderer.c src/Utils.c glui/GL.c glui/Font.c glui/Main.c glui/GLWindow.c
+@DEBUG_TRUE@AM_CXXFLAGS = -Isrc -Iglui -Ideps/tinydir -Ideps/tomlc99 \
+@DEBUG_TRUE@	-I3rdparty/hvl -I3rdparty/libsidplayfp -g3 -O0 \
+@DEBUG_TRUE@	-fsanitize=address -Wall -Wextra \
+@DEBUG_TRUE@	-Wno-unused-function -Wno-overlength-strings \
+@DEBUG_TRUE@	$(am__append_2)
+modp_SOURCES = deps/tomlc99/toml.c 3rdparty/hvl/hvl_replay.c 3rdparty/libsidplayfp/libsidplayfp_wrap.cpp src/AudioManager.c src/Player.c src/OpenMPTRenderer.c src/Option.c src/HVLRenderer.c src/HCS64File.c src/LocalDir.c src/GMERenderer.c src/XMPRenderer.c src/SIDRenderer.c src/Utils.c glui/GL.c glui/Font.c glui/Main.c glui/GLWindow.c
 modp_LDADD = -L/usr/local/lib/
 all: all-am
 
@@ -415,6 +419,14 @@ uninstall-binPROGRAMS:
 
 clean-binPROGRAMS:
 	-test -z "$(bin_PROGRAMS)" || rm -f $(bin_PROGRAMS)
+deps/tomlc99/$(am__dirstamp):
+	@$(MKDIR_P) deps/tomlc99
+	@: > deps/tomlc99/$(am__dirstamp)
+deps/tomlc99/$(DEPDIR)/$(am__dirstamp):
+	@$(MKDIR_P) deps/tomlc99/$(DEPDIR)
+	@: > deps/tomlc99/$(DEPDIR)/$(am__dirstamp)
+deps/tomlc99/toml.$(OBJEXT): deps/tomlc99/$(am__dirstamp) \
+	deps/tomlc99/$(DEPDIR)/$(am__dirstamp)
 3rdparty/hvl/$(am__dirstamp):
 	@$(MKDIR_P) 3rdparty/hvl
 	@: > 3rdparty/hvl/$(am__dirstamp)
@@ -481,6 +493,7 @@ mostlyclean-compile:
 	-rm -f *.$(OBJEXT)
 	-rm -f 3rdparty/hvl/*.$(OBJEXT)
 	-rm -f 3rdparty/libsidplayfp/*.$(OBJEXT)
+	-rm -f deps/tomlc99/*.$(OBJEXT)
 	-rm -f glui/*.$(OBJEXT)
 	-rm -f src/*.$(OBJEXT)
 
@@ -489,6 +502,7 @@ distclean-compile:
 
 @AMDEP_TRUE@@am__include@ @am__quote@3rdparty/hvl/$(DEPDIR)/hvl_replay.Po@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@3rdparty/libsidplayfp/$(DEPDIR)/libsidplayfp_wrap.Po@am__quote@ # am--include-marker
+@AMDEP_TRUE@@am__include@ @am__quote@deps/tomlc99/$(DEPDIR)/toml.Po@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@glui/$(DEPDIR)/Font.Po@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@glui/$(DEPDIR)/GL.Po@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@glui/$(DEPDIR)/GLWindow.Po@am__quote@ # am--include-marker
@@ -810,6 +824,8 @@ distclean-generic:
 	-rm -f 3rdparty/hvl/$(am__dirstamp)
 	-rm -f 3rdparty/libsidplayfp/$(DEPDIR)/$(am__dirstamp)
 	-rm -f 3rdparty/libsidplayfp/$(am__dirstamp)
+	-rm -f deps/tomlc99/$(DEPDIR)/$(am__dirstamp)
+	-rm -f deps/tomlc99/$(am__dirstamp)
 	-rm -f glui/$(DEPDIR)/$(am__dirstamp)
 	-rm -f glui/$(am__dirstamp)
 	-rm -f src/$(DEPDIR)/$(am__dirstamp)
@@ -826,6 +842,7 @@ distclean: distclean-am
 	-rm -f $(am__CONFIG_DISTCLEAN_FILES)
 		-rm -f 3rdparty/hvl/$(DEPDIR)/hvl_replay.Po
 	-rm -f 3rdparty/libsidplayfp/$(DEPDIR)/libsidplayfp_wrap.Po
+	-rm -f deps/tomlc99/$(DEPDIR)/toml.Po
 	-rm -f glui/$(DEPDIR)/Font.Po
 	-rm -f glui/$(DEPDIR)/GL.Po
 	-rm -f glui/$(DEPDIR)/GLWindow.Po
@@ -890,6 +907,7 @@ maintainer-clean: maintainer-clean-am
 	-rm -rf $(top_srcdir)/autom4te.cache
 		-rm -f 3rdparty/hvl/$(DEPDIR)/hvl_replay.Po
 	-rm -f 3rdparty/libsidplayfp/$(DEPDIR)/libsidplayfp_wrap.Po
+	-rm -f deps/tomlc99/$(DEPDIR)/toml.Po
 	-rm -f glui/$(DEPDIR)/Font.Po
 	-rm -f glui/$(DEPDIR)/GL.Po
 	-rm -f glui/$(DEPDIR)/GLWindow.Po
