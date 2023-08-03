@@ -446,7 +446,8 @@ struct hvl_tune *hvl_load_ahx( const uint8 *buf, uint32 buflen, uint32 defstereo
     return NULL;
   }
 
-  strncpy( ht->ht_Name, (TEXT *)&buf[(buf[4]<<8)|buf[5]], 128 );
+  strncpy( ht->ht_Name, (TEXT *)&buf[(buf[4]<<8)|buf[5]], 127 );
+  ht->ht_Name[127] = '\0';
   nptr = (TEXT *)&buf[((buf[4]<<8)|buf[5])+strlen( ht->ht_Name )+1];
 
   bptr = &buf[14];
@@ -504,7 +505,8 @@ struct hvl_tune *hvl_load_ahx( const uint8 *buf, uint32 buflen, uint32 defstereo
   {
     if( nptr < (TEXT *)(buf+buflen) )
     {
-      strncpy( ht->ht_Instruments[i].ins_Name, nptr, 128 );
+      strncpy( ht->ht_Instruments[i].ins_Name, nptr, 127 );
+      ht->ht_Instruments[i].ins_Name[127] = '\0';
       nptr += strlen( nptr )+1;
     } else {
       ht->ht_Instruments[i].ins_Name[0] = 0;
@@ -672,7 +674,8 @@ struct hvl_tune *hvl_load_hvl( const uint8 *buf, uint32 buflen, uint32 freq, uin
     return NULL;
   }
 
-  strncpy( ht->ht_Name, (TEXT *)&buf[(buf[4]<<8)|buf[5]], 128 );
+  strncpy( ht->ht_Name, (TEXT *)&buf[(buf[4]<<8)|buf[5]], 127 );
+  ht->ht_Name[127] = '\0';
   nptr = (TEXT *)&buf[((buf[4]<<8)|buf[5])+strlen( ht->ht_Name )+1];
 
   bptr = &buf[16];
@@ -741,7 +744,8 @@ struct hvl_tune *hvl_load_hvl( const uint8 *buf, uint32 buflen, uint32 freq, uin
   {
     if( nptr < (TEXT *)(buf+buflen) )
     {
-      strncpy( ht->ht_Instruments[i].ins_Name, nptr, 128 );
+      strncpy( ht->ht_Instruments[i].ins_Name, nptr, 127 );
+      ht->ht_Instruments[i].ins_Name[127] = '\0';
       nptr += strlen( nptr )+1;
     } else {
       ht->ht_Instruments[i].ins_Name[0] = 0;
