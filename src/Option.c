@@ -2,6 +2,7 @@
 // Licence: GPL v3
 
 #include <SDL2/SDL_assert.h>
+#include <bits/getopt_core.h>
 #include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -20,7 +21,7 @@
 #include "Option.h"
 #include "Globals.h"
 #include "Utils.h"
-
+#include "deps/tomlc99/toml.h"
 
 static void
 print_value_description(Option* opt)
@@ -100,20 +101,12 @@ write_opt(Option* opt, FILE* out)
 }
 
 static int
-create_config(Option* option, size_t n_opts, const char* path)
+resolve_path(char* real_path, const char* path)
 {
 	char resolved_path[_TINYDIR_PATH_MAX] = { 0 };
-	char realpath_resolved_path[_TINYDIR_PATH_MAX] = { 0 };
 	char tmp[_TINYDIR_PATH_MAX] = { 0 };
-	char filename[_TINYDIR_PATH_MAX] = { 0 };
-	FILE* cfg_file;
-	struct stat st = { 0 };
 	char* result;
-	char* pos;
-
-#if DEBUG
-	printf("incoming: %s\n", path);
-#endif
+	SDL_LogDebug(SDL_LOG_CATEGORY_SYSTEM, "incoming: %s\n", path);
 
 #ifndef _WIN32
 	// expand "~"
@@ -135,18 +128,29 @@ create_config(Option* option, size_t n_opts, const char* path)
 		StrCpy(resolved_path, sizeof(resolved_path), tmp);
 	}
 
-#if DEBUG
 	SDL_LogDebug(SDL_LOG_CATEGORY_SYSTEM, "after ~ and ./ expansion: %s\n", resolved_path);
-#endif
+    StrCpy(real_path, sizeof(resolved_path), resolved_path);
+    return 0;
+}
 
+static int
+create_config(Option* option, size_t n_opts, const char* path)
+{
+	char* resolved_path = calloc(_TINYDIR_PATH_MAX, sizeof(char));
+    char realpath_resolved_path[_TINYDIR_PATH_MAX] = { 0 };
+	char tmp[_TINYDIR_PATH_MAX] = { 0 };
+	char filename[_TINYDIR_PATH_MAX] = { 0 };
+	FILE* cfg_file;
+	struct stat st = { 0 };
+	char* result;
+	char* pos;
+
+    resolve_path(resolved_path, path);
 	result = strrchr(resolved_path, DIRSEP);
 	assert(result && strlen(result) > 0);
 	sscanf(result + 1, "%s", filename);
 	assert(strlen(filename));
-
-#if DEBUG
 	SDL_LogDebug(SDL_LOG_CATEGORY_SYSTEM, "filename: %s\n", filename);
-#endif
 
 	pos = resolved_path;
 
@@ -162,10 +166,8 @@ create_config(Option* option, size_t n_opts, const char* path)
 
 		result = realpath(tmp, realpath_resolved_path);
 
-#if DEBUG
 		SDL_LogDebug(SDL_LOG_CATEGORY_SYSTEM, "tmp: %s\n", tmp);
 		SDL_LogDebug(SDL_LOG_CATEGORY_SYSTEM, "realpath_resolved_path: %s\n", realpath_resolved_path);
-#endif
 
 		if (stat(tmp, &st) == -1) {
 #ifndef _WIN32
@@ -273,11 +275,123 @@ set_dest_from_string(Option* option, char* string)
 	return 0;
 }
 
+static int
+config_lookup_set_dest(toml_table_t* config, Option* option)
+{
+	toml_datum_t d;
+	switch (option->type) {
+		case OPT_STRING:
+        d = toml_string_in(config, option->long_name);
+        if (d.ok) {
+            if ((strcmp(d.u.s, "") != 0) && (strcmp(d.u.s, option->initial.str) != 0)) {
+			    StrCpy((char*) option->dest, _TINYDIR_PATH_MAX, d.u.s);
+            }
+        }
+			break;
+		case OPT_BOOL:
+        d = toml_bool_in(config, option->long_name);
+        if (d.ok) {
+            if (d.u.b != option->initial.b) {
+	            *((bool*) option->dest) = d.u.b;
+            }
+        }
+			break;
+		case OPT_UINT:
+            d = toml_int_in(config, option->long_name);
+            if (d.ok) {
+                if (d.u.i != option->initial.u) {
+                    *((size_t*) option->dest) = d.u.i;
+                }
+            }
+			break;
+		case OPT_FLOAT:
+            d = toml_double_in(config, option->long_name);
+            if (d.ok) {
+                if (d.u.d != option->initial.f) {
+                    *((float*) option->dest) = d.u.d;
+                }
+            }
+			break;
+		default:
+			return 1;
+			break;
+	}
+	return 0;
+}
+
+char*
+get_config_from_opts(int argc, char* argv[], Option* option, size_t n_opts)
+{
+    //TODO make this function less weird
+	struct option long_options[n_opts + 1];
+	Option* option_iter = option;
+	memset(&long_options, 0, sizeof(struct option) * (n_opts + 1));
+
+	for (size_t i = 0; i < n_opts;  i++) {
+		long_options[i].name = option_iter->long_name;
+		long_options[i].has_arg = option_iter->has_arg;
+		switch (option_iter->type) {
+			case OPT_STRING:
+                if (strcmp(option_iter->long_name, "config") == 0) {
+				    set_dest_from_value(option_iter, (void*) option_iter->initial.str);
+                }
+                break;
+			default:
+				break;
+		}
+        if (strcmp(option_iter->long_name, "config") == 0) {
+            break;
+        }
+		option_iter++;
+	}
+	int c;
+	while (1) {
+		int option_index = 0;
+		Option* tmp_option;
+
+		c = getopt_long(argc, argv, "0", long_options, &option_index);
+
+		if (c != 0)
+			break;
+
+		tmp_option = &option[option_index];
+
+		switch (tmp_option->type) {
+			case OPT_STRING:
+                if (strcmp(tmp_option->long_name, "config") == 0) {
+                    return optarg;
+                }
+            default:
+				break;
+        }
+	}
+    return option_iter->initial.str;
+}
+
 int
 Option_Init(int argc, char* argv[], Option* option, size_t n_opts)
 {
 	struct option long_options[n_opts + 1];
 	Option* option_iter = option;
+	char* config_path = calloc(_TINYDIR_PATH_MAX, sizeof(char));
+	// Option* opt_cfg = malloc(sizeof(Option) * (n_opts + 1));
+	char* cfgpath = get_config_from_opts(argc, argv, option, n_opts);
+	resolve_path(config_path, cfgpath);
+	toml_table_t* config;
+	FILE* fd;
+	char errbuf[256];
+
+	fd = fopen(config_path, "r");
+	if (!fd) {
+	    SDL_LogWarn(SDL_LOG_CATEGORY_SYSTEM, "failed to open configuration %s: %s\n", config_path, strerror(errno));
+	    return 1;
+	}
+	config = toml_parse_file(fd, errbuf, sizeof(errbuf));
+	fclose(fd);
+
+	if (!config) {
+	    SDL_LogWarn(SDL_LOG_CATEGORY_SYSTEM, "failed to parse %s: %s\n", config_path, strerror(errno));
+	}
 
 	memset(&long_options, 0, sizeof(struct option) * (n_opts + 1));
 
@@ -290,15 +404,19 @@ Option_Init(int argc, char* argv[], Option* option, size_t n_opts)
 		switch (option_iter->type) {
 			case OPT_STRING:
 				set_dest_from_value(option_iter, (void*) option_iter->initial.str);
+				config_lookup_set_dest(config, option_iter);
 				break;
 			case OPT_BOOL:
 				set_dest_from_value(option_iter, (void*) &option_iter->initial.b);
+				config_lookup_set_dest(config, option_iter);
 				break;
 			case OPT_UINT:
 				set_dest_from_value(option_iter, (void*) &option_iter->initial.u);
+				config_lookup_set_dest(config, option_iter);
 				break;
 			case OPT_FLOAT:
 				set_dest_from_value(option_iter, (void*) &option_iter->initial.f);
+				config_lookup_set_dest(config, option_iter);
 				break;
 			default:
 				break;
@@ -332,8 +450,7 @@ Option_Init(int argc, char* argv[], Option* option, size_t n_opts)
 					exit(0);
 				}
 				if (!strcmp("createconfig", tmp_option->long_name)) {
-					Option* path = find_option_from_long_name(option, n_opts, "config");
-					create_config(option, n_opts, (const char*) path->dest);
+					create_config(option, n_opts, (const char*) config_path);
 					exit(0);
 				}
 				if (!strcmp("showconfig", tmp_option->long_name)) {
@@ -345,5 +462,6 @@ Option_Init(int argc, char* argv[], Option* option, size_t n_opts)
 		}
 	}
 
+    free(config_path);
 	return 0;
 }
