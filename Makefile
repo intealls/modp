@@ -3,8 +3,8 @@ CXX = g++
 WARNINGS = -pedantic -Wall -Wextra -Wno-unused-function -Wno-overlength-strings
 CFLAGS = -fno-omit-frame-pointer -O3 -march=native $(WARNINGS) -std=c11 -D_USE_MATH_DEFINES -D_DEFAULT_SOURCE
 CXXFLAGS = -fno-omit-frame-pointer -O3 -march=native $(WARNINGS) -D_USE_MATH_DEFINES -D_DEFAULT_SOURCE
-LIBS =  -L/usr/local/lib/ -lopenmpt -lgme -lportaudio -larchive -lsidplayfp -lxmp
-INCLUDE = -I/usr/local/include/sidplay -Ideps/tinydir -I3rdparty/hvl -I3rdparty/libsidplayfp -Isrc
+LIBS =  -L/usr/local/lib/ -lxmp -lsidplayfp -lportaudio -lgme -larchive -lSDL2_image -lSDL2
+INCLUDE = -I/usr/local/include/sidplay -Ideps/tinydir -I3rdparty/hvl -I3rdparty/libsidplayfp -Ideps/tomlc99 -Isrc
 
 ODIR = bin
 NAME = $(ODIR)/modp
@@ -46,7 +46,7 @@ directories:
 	mkdir -p $(ODIR)
 
 executable:
-	$(CC) $(CFLAGS) $(INCLUDE) -c src/*.c $(UI)/*.c 3rdparty/hvl/*.c $(LIBS)
+	$(CC) $(CFLAGS) $(INCLUDE) -c src/*.c $(UI)/*.c 3rdparty/hvl/hvl_replay.c deps/tomlc99/toml.c $(LIBS)
 	$(CXX) $(CXXFLAGS) $(INCLUDE) -c 3rdparty/libsidplayfp/libsidplayfp_wrap.cpp $(LIBS)
 	$(CXX) $(CXXFLAGS) $(INCLUDE) *.o -o $(NAME) $(LIBS)
 
