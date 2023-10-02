@@ -21,7 +21,7 @@
 #include "Option.h"
 #include "Globals.h"
 #include "Utils.h"
-#include "deps/tomlc99/toml.h"
+#include "toml.h"
 
 static void
 print_value_description(Option* opt)
@@ -48,7 +48,6 @@ print_value_description(Option* opt)
 static void
 print_help(Option* option, size_t n_opts)
 {
-	printf("\n  %s %s\n\n", PACKAGE, VERSION);
 	for (size_t i = 0; i < n_opts; i++) {
 		printf("  --%-25s%s", option[i].long_name, option[i].description);
 		print_value_description(&option[i]);
@@ -381,13 +380,13 @@ Option_Init(int argc, char* argv[], Option* option, size_t n_opts)
 	FILE* fd;
 	char errbuf[256];
 
-	fd = fopen(config_path, "r");
+	fd = fopen(config_path, "r+");
 	if (!fd) {
 	    SDL_LogWarn(SDL_LOG_CATEGORY_SYSTEM, "failed to open configuration %s: %s\n", config_path, strerror(errno));
-	    return 1;
-	}
-	config = toml_parse_file(fd, errbuf, sizeof(errbuf));
-	fclose(fd);
+	} else {
+	    config = toml_parse_file(fd, errbuf, sizeof(errbuf));
+	    fclose(fd);
+    }
 
 	if (!config) {
 	    SDL_LogWarn(SDL_LOG_CATEGORY_SYSTEM, "failed to parse %s: %s\n", config_path, strerror(errno));
