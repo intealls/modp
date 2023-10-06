@@ -403,19 +403,27 @@ Option_Init(int argc, char* argv[], Option* option, size_t n_opts)
 		switch (option_iter->type) {
 			case OPT_STRING:
 				set_dest_from_value(option_iter, (void*) option_iter->initial.str);
-				config_lookup_set_dest(config, option_iter);
+                if (config) {
+				    config_lookup_set_dest(config, option_iter);
+                }
 				break;
 			case OPT_BOOL:
 				set_dest_from_value(option_iter, (void*) &option_iter->initial.b);
-				config_lookup_set_dest(config, option_iter);
+                if (config) {
+				    config_lookup_set_dest(config, option_iter);
+                }
 				break;
 			case OPT_UINT:
 				set_dest_from_value(option_iter, (void*) &option_iter->initial.u);
-				config_lookup_set_dest(config, option_iter);
+                if (config) {
+				    config_lookup_set_dest(config, option_iter);
+                }
 				break;
 			case OPT_FLOAT:
 				set_dest_from_value(option_iter, (void*) &option_iter->initial.f);
-				config_lookup_set_dest(config, option_iter);
+                if (config) {
+				    config_lookup_set_dest(config, option_iter);
+                }
 				break;
 			default:
 				break;

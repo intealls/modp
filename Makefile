@@ -10,6 +10,14 @@ ODIR = bin
 NAME = $(ODIR)/modp
 UI = glui
 
+OPENMPT_SUPPORT = 0
+
+ifeq ($(OPENMPT_SUPPORT), 1)
+	LIBS +=  -lopenmpt
+	CFLAGS += -DHAVE_OPENMPT
+	CXXFLAGS += -DHAVE_OPENMPT
+endif
+
 ifeq ($(UI),glui)
 	LIBS += -lm -lfftw3f
 	ifeq ($(OS),Windows_NT)
