@@ -12,6 +12,7 @@
 
 extern "C" {
 #endif
+
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -22,31 +23,31 @@ typedef struct sidplayfp sidplayfp;
 typedef struct SidTune SidTune;
 
 struct ReSIDfpBuilder* newReSIDfpBuilder();
-void deleteReSIDfpBuilder(ReSIDfpBuilder *c);
+void                   deleteReSIDfpBuilder(ReSIDfpBuilder*);
 
-struct SidConfig* newSidConfig();
-void deleteSidConfig(SidConfig *c);
+struct SidConfig*      newSidConfig();
+void                   deleteSidConfig(SidConfig*);
 
-struct sidplayfp* newSidEngine();
-void deleteSideEngine(sidplayfp *c);
-unsigned int initSidEngine(sidplayfp *m_engine, ReSIDfpBuilder *rs, unsigned int channels, unsigned int samplerate);
-bool isPlayingSidEngine(sidplayfp *m_engine);
+struct sidplayfp*      newSidEngine();
+void                   deleteSideEngine(sidplayfp*);
+unsigned int           initSidEngine(sidplayfp*, ReSIDfpBuilder*, unsigned int, unsigned int);
+bool                   isPlayingSidEngine(sidplayfp*);
 
-struct SidTune* newSidTune(const void *buf, unsigned int buflen);
-void deleteSidTune(SidTune *c);
+struct SidTune*        newSidTune(const void*, unsigned int);
+void                   deleteSidTune(SidTune*);
 
-unsigned int startSongSidTune(SidTune *m_tune);
-unsigned int songsSidTune(SidTune *m_tune);
-unsigned int numberOfInfoStringsSidTune(SidTune *m_tune);
-const char* infoStringSidTune(SidTune *m_tune, unsigned int n);
-unsigned int numberOfCommentStringsSidTune(SidTune *m_tune);
-const char* commentStringSidTune(SidTune *m_tune, unsigned int n);
-unsigned int selectSongSidTune(SidTune *m_tune, unsigned int n);
-unsigned int currentSongSidTune(SidTune *m_tune);
+unsigned int           startSongSidTune(SidTune*);
+unsigned int           songsSidTune(SidTune*);
+unsigned int           numberOfInfoStringsSidTune(SidTune*);
+const char*            infoStringSidTune(SidTune*, unsigned int);
+unsigned int           numberOfCommentStringsSidTune(SidTune*);
+const char*            commentStringSidTune(SidTune*, unsigned int);
+unsigned int           selectSongSidTune(SidTune*, unsigned int);
+unsigned int           currentSongSidTune(SidTune*);
 
-bool getStatusSidTune(SidTune *m_tune);
-unsigned int loadSidTune(struct SidTune *m_tune, struct sidplayfp *m_engine);
-unsigned int playSidEngine(sidplayfp *m_engine, short *buf, size_t buffer_samples);
+bool                   getStatusSidTune(SidTune*);
+unsigned int           loadSidTune(struct SidTune*, struct sidplayfp*);
+unsigned int           playSidEngine(sidplayfp*, short*, size_t);
 
 #ifdef __cplusplus
 }
