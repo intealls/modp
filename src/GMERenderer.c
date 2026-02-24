@@ -4,7 +4,7 @@
 #include <assert.h>
 #include <stdbool.h>
 #include <string.h>
-#include <malloc.h>
+#include <stdlib.h>
 
 #include <gme/gme.h>
 #include <tinydir.h>
@@ -13,6 +13,7 @@
 #include "GMERenderer.h"
 #include "Globals.h"
 #include "Utils.h"
+#include "VTableInit.h"
 
 #define GME_TRACK_LENGTH 90000
 
@@ -94,36 +95,44 @@ GMERenderer_CanLoad(const AudioRenderer* obj,
 {
 	DataObject(rndr_data, obj);
 
-	Music_Emu* tmp;
+	Music_Emu* tmp = NULL;
 
 	char* song = NULL;
-	size_t song_len;
+	size_t song_len = 0;
 
 	char* m3u = NULL;
-	size_t m3u_len;
+	size_t m3u_len = 0;
 
 	gme_err_t err;
 
 	err = gme_open_data(data, len, &tmp, rndr_data->fs);
 
-	gme_delete(tmp);
-
-	if (err == NULL)
+	if (err == NULL) {
+		gme_delete(tmp);
 		return true;
+	}
+
+	// tmp is only freed if err == NULL, so no need to delete here
+	// But let's be explicit
+	if (tmp != NULL) {
+		gme_delete(tmp);
+		tmp = NULL;
+	}
 
 	if (TryOpenHCS64(data, len, &song, &song_len, &m3u, &m3u_len)) {
 		err = gme_open_data(song, song_len, &tmp, rndr_data->fs);
+
+		bool result = (err == NULL);
 
 		if (song != NULL)
 			free(song);
 		if (m3u != NULL)
 			free(m3u);
+		if (tmp != NULL)
+			gme_delete(tmp);
 
-		gme_delete(tmp);
+		return result;
 	}
-
-	if (err == NULL)
-		return true;
 
 	return false;
 }
@@ -320,40 +329,45 @@ GMERenderer_Destroy(AudioRenderer* obj)
 	free(obj);
 }
 
+static AudioRenderer_VTable* GMERenderer_InitVTable(void) {
+	static AudioRenderer_VTable _vtable;
+	memset((void*) &_vtable, 0, sizeof(AudioRenderer_VTable));
+
+	_vtable.Load     = (*GMERenderer_Load);
+	_vtable.CanLoad  = (*GMERenderer_CanLoad);
+	_vtable.Loaded   = (*GMERenderer_Loaded);
+	_vtable.UnLoad   = (*GMERenderer_UnLoad);
+	_vtable.Render   = (*GMERenderer_Render);
+	_vtable.Title    = (*GMERenderer_Title);
+	_vtable.Info     = (*GMERenderer_Info);
+	_vtable.Track    = (*GMERenderer_Track);
+	_vtable.NTracks  = (*GMERenderer_NTracks);
+	_vtable.SetTrack = (*GMERenderer_SetTrack);
+	_vtable.PlayTime = (*GMERenderer_PlayTime);
+	_vtable.Length   = (*GMERenderer_Length);
+	_vtable.Destroy  = (*GMERenderer_Destroy);
+
+	return &_vtable;
+}
+
 AudioRenderer*
 GMERenderer_Create(int fs, int bits, int channels)
 {
 	AudioRenderer* arndr;
 	GMERenderer_Data* rndr_data;
 
-	static AudioRenderer_VTable _vtable;
-	static bool _initialized = false;
+	static AudioRenderer_VTable* _vtable_ptr = NULL;
 
-	if (!_initialized) {
-		memset((void*) &_vtable, 0, sizeof(AudioRenderer_VTable));
-
-		_vtable.Load     = (*GMERenderer_Load);
-		_vtable.CanLoad  = (*GMERenderer_CanLoad);
-		_vtable.Loaded   = (*GMERenderer_Loaded);
-		_vtable.UnLoad   = (*GMERenderer_UnLoad);
-		_vtable.Render   = (*GMERenderer_Render);
-		_vtable.Title    = (*GMERenderer_Title);
-		_vtable.Info     = (*GMERenderer_Info);
-		_vtable.Track    = (*GMERenderer_Track);
-		_vtable.NTracks  = (*GMERenderer_NTracks);
-		_vtable.SetTrack = (*GMERenderer_SetTrack);
-		_vtable.PlayTime = (*GMERenderer_PlayTime);
-		_vtable.Length   = (*GMERenderer_Length);
-		_vtable.Destroy  = (*GMERenderer_Destroy);
-
-		_initialized = true;
-	}
+	VTABLE_INIT_ONCE(AudioRenderer_VTable, _vtable_ptr, GMERenderer_InitVTable);
 
 	arndr = (AudioRenderer*) calloc(1, sizeof(AudioRenderer));
-	assert(arndr);
+	if (!arndr) return NULL;
 
 	rndr_data = (GMERenderer_Data*) calloc(1, sizeof(GMERenderer_Data));
-	assert(rndr_data);
+	if (!rndr_data) {
+		free(arndr);
+		return NULL;
+	}
 
 	rndr_data->fs = fs;
 	rndr_data->bits = bits;
@@ -364,7 +378,7 @@ GMERenderer_Create(int fs, int bits, int channels)
 	rndr_data->current_track = -1;
 	rndr_data->track_length = -1;
 
-	arndr->vtable = &_vtable;
+	arndr->vtable = _vtable_ptr;
 	arndr->data = (void*) rndr_data;
 
 	return arndr;

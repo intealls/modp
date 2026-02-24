@@ -4,7 +4,7 @@
 #include <assert.h>
 #include <stdbool.h>
 #include <string.h>
-#include <malloc.h>
+#include <stdlib.h>
 #include <stddef.h>
 #include <stdint.h>
 
@@ -12,6 +12,7 @@
 #include "SIDRenderer.h"
 #include "Globals.h"
 #include "Utils.h"
+#include "VTableInit.h"
 
 typedef struct SIDRenderer_Data {
 	struct ReSIDfpBuilder* resid_builder;
@@ -200,7 +201,7 @@ SIDRenderer_SetTrack(const AudioRenderer* obj, int track)
 {
 	DataObject(rndr_data, obj);
 	if (rndr_data->sid_tune != NULL) {
-		char* info_prefix = NULL;
+		const char* info_prefix = NULL;
 		size_t n = 0;
 		size_t infostr_len;
 		rndr_data->current_track = track;
@@ -271,40 +272,45 @@ SIDRenderer_Destroy(AudioRenderer* obj)
 	free(obj);
 }
 
+static AudioRenderer_VTable* SIDRenderer_InitVTable(void) {
+	static AudioRenderer_VTable _vtable;
+	memset((void*) &_vtable, 0, sizeof(AudioRenderer_VTable));
+
+	_vtable.Load     = (*SIDRenderer_Load);
+	_vtable.CanLoad  = (*SIDRenderer_CanLoad);
+	_vtable.Loaded   = (*SIDRenderer_Loaded);
+	_vtable.UnLoad   = (*SIDRenderer_UnLoad);
+	_vtable.Render   = (*SIDRenderer_Render);
+	_vtable.Title    = (*SIDRenderer_Title);
+	_vtable.Info     = (*SIDRenderer_Info);
+	_vtable.Track    = (*SIDRenderer_Track);
+	_vtable.NTracks  = (*SIDRenderer_NTracks);
+	_vtable.SetTrack = (*SIDRenderer_SetTrack);
+	_vtable.PlayTime = (*SIDRenderer_PlayTime);
+	_vtable.Length   = (*SIDRenderer_Length);
+	_vtable.Destroy  = (*SIDRenderer_Destroy);
+
+	return &_vtable;
+}
+
 AudioRenderer*
 SIDRenderer_Create(int fs, int bits, int channels)
 {
 	AudioRenderer* arndr;
 	SIDRenderer_Data* rndr_data;
 
-	static AudioRenderer_VTable _vtable;
-	static bool _initialized = false;
+	static AudioRenderer_VTable* _vtable_ptr = NULL;
 
-	if (!_initialized) {
-		memset((void*) &_vtable, 0, sizeof(AudioRenderer_VTable));
-
-		_vtable.Load     = (*SIDRenderer_Load);
-		_vtable.CanLoad  = (*SIDRenderer_CanLoad);
-		_vtable.Loaded   = (*SIDRenderer_Loaded);
-		_vtable.UnLoad   = (*SIDRenderer_UnLoad);
-		_vtable.Render   = (*SIDRenderer_Render);
-		_vtable.Title    = (*SIDRenderer_Title);
-		_vtable.Info     = (*SIDRenderer_Info);
-		_vtable.Track    = (*SIDRenderer_Track);
-		_vtable.NTracks  = (*SIDRenderer_NTracks);
-		_vtable.SetTrack = (*SIDRenderer_SetTrack);
-		_vtable.PlayTime = (*SIDRenderer_PlayTime);
-		_vtable.Length   = (*SIDRenderer_Length);
-		_vtable.Destroy  = (*SIDRenderer_Destroy);
-
-		_initialized = true;
-	}
+	VTABLE_INIT_ONCE(AudioRenderer_VTable, _vtable_ptr, SIDRenderer_InitVTable);
 
 	arndr = (AudioRenderer*) calloc(1, sizeof(AudioRenderer));
-	assert(arndr);
+	if (!arndr) return NULL;
 
 	rndr_data = (SIDRenderer_Data*) calloc(1, sizeof(SIDRenderer_Data));
-	assert(rndr_data);
+	if (!rndr_data) {
+		free(arndr);
+		return NULL;
+	}
 
 	rndr_data->fs = fs;
 	rndr_data->bits = bits;
@@ -316,7 +322,7 @@ SIDRenderer_Create(int fs, int bits, int channels)
 	rndr_data->current_track = -1;
 	rndr_data->track_length = -1;
 
-	arndr->vtable = &_vtable;
+	arndr->vtable = _vtable_ptr;
 	arndr->data = (void*) rndr_data;
 
 	return arndr;

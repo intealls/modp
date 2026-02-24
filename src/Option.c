@@ -6,6 +6,7 @@
 #include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdlib.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <string.h>
@@ -102,15 +103,30 @@ write_opt(Option* opt, FILE* out)
 static int
 resolve_path(char* real_path, const char* path)
 {
+	if (!real_path || !path) {
+		return -1;
+	}
+
 	char resolved_path[_TINYDIR_PATH_MAX] = { 0 };
 	char tmp[_TINYDIR_PATH_MAX] = { 0 };
 	char* result;
 	SDL_LogDebug(SDL_LOG_CATEGORY_SYSTEM, "incoming: %s\n", path);
 
 #ifndef _WIN32
-	// expand "~"
+	// expand "~" with proper error handling and security flags
 	wordexp_t exp_result;
-	wordexp(path, &exp_result, 0);
+	int ret = wordexp(path, &exp_result, WRDE_NOCMD);
+	if (ret != 0 || exp_result.we_wordc == 0) {
+		SDL_LogError(SDL_LOG_CATEGORY_SYSTEM,
+		             "Failed to expand path: %s\n", path);
+		return -1;
+	}
+
+	// Check length before copying
+	if (strlen(exp_result.we_wordv[0]) >= _TINYDIR_PATH_MAX) {
+		wordfree(&exp_result);
+		return -1;
+	}
 
 	StrCpy(resolved_path, _TINYDIR_PATH_MAX, exp_result.we_wordv[0]);
 	wordfree(&exp_result);
@@ -121,22 +137,49 @@ resolve_path(char* real_path, const char* path)
 	// if no DIRSEP, prefix with "./"
 	result = strchr(resolved_path, DIRSEP);
 	if (result == NULL) {
-		strncat(tmp, ".", sizeof(tmp) - 1);
-		strncat(tmp, DIRSEP_STR, sizeof(tmp) - 2);
-		strncat(tmp, resolved_path, sizeof(tmp) - strlen(tmp) - 1);
+		size_t tmp_len = strlen(tmp);
+		size_t space_remaining = sizeof(tmp) - tmp_len - 1;
+
+		// Safe string concatenation with bounds checking
+		if (space_remaining > 0) {
+			tmp[tmp_len] = '.';
+			tmp_len++;
+			space_remaining--;
+		}
+
+		if (space_remaining > strlen(DIRSEP_STR)) {
+			strcpy(tmp + tmp_len, DIRSEP_STR);
+			tmp_len += strlen(DIRSEP_STR);
+			space_remaining -= strlen(DIRSEP_STR);
+		}
+
+		if (strlen(resolved_path) < space_remaining) {
+			strcpy(tmp + tmp_len, resolved_path);
+		}
+
 		StrCpy(resolved_path, sizeof(resolved_path), tmp);
 	}
 
 	SDL_LogDebug(SDL_LOG_CATEGORY_SYSTEM, "after ~ and ./ expansion: %s\n", resolved_path);
-    StrCpy(real_path, sizeof(resolved_path), resolved_path);
-    return 0;
+	StrCpy(real_path, _TINYDIR_PATH_MAX, resolved_path);
+	return 0;
 }
 
 static int
 create_config(Option* option, size_t n_opts, const char* path)
 {
 	char* resolved_path = calloc(_TINYDIR_PATH_MAX, sizeof(char));
-    char realpath_resolved_path[_TINYDIR_PATH_MAX] = { 0 };
+	if (!resolved_path) {
+		SDL_LogError(SDL_LOG_CATEGORY_SYSTEM, "Failed to allocate memory\n");
+		return -1;
+	}
+
+	if (resolve_path(resolved_path, path) != 0) {
+		free(resolved_path);
+		return -1;
+	}
+
+	char realpath_resolved_path[_TINYDIR_PATH_MAX] = { 0 };
 	char tmp[_TINYDIR_PATH_MAX] = { 0 };
 	char filename[_TINYDIR_PATH_MAX] = { 0 };
 	FILE* cfg_file;
@@ -144,11 +187,19 @@ create_config(Option* option, size_t n_opts, const char* path)
 	char* result;
 	char* pos;
 
-    resolve_path(resolved_path, path);
 	result = strrchr(resolved_path, DIRSEP);
-	assert(result && strlen(result) > 0);
+	if (!result || strlen(result) <= 1) {
+		SDL_LogError(SDL_LOG_CATEGORY_SYSTEM, "Invalid path format\n");
+		free(resolved_path);
+		return -1;
+	}
+
 	sscanf(result + 1, "%s", filename);
-	assert(strlen(filename));
+	if (strlen(filename) == 0) {
+		SDL_LogError(SDL_LOG_CATEGORY_SYSTEM, "Empty filename\n");
+		free(resolved_path);
+		return -1;
+	}
 	SDL_LogDebug(SDL_LOG_CATEGORY_SYSTEM, "filename: %s\n", filename);
 
 	pos = resolved_path;
@@ -174,7 +225,11 @@ create_config(Option* option, size_t n_opts, const char* path)
 #else
 			int status = mkdir(tmp);
 #endif
-			assert(status == 0);
+			if (status != 0 && errno != EEXIST) {
+				SDL_LogError(SDL_LOG_CATEGORY_SYSTEM, "Failed to create directory: %s\n", tmp);
+				free(resolved_path);
+				return -1;
+			}
 			continue;
 		}
 
@@ -183,22 +238,41 @@ create_config(Option* option, size_t n_opts, const char* path)
 	}
 
 #ifndef _WIN32
-	result = strncat(realpath_resolved_path, DIRSEP_STR, _TINYDIR_PATH_MAX - strlen(realpath_resolved_path) - 1);
-	assert(result);
+	size_t path_len = strlen(realpath_resolved_path);
+	if (path_len < _TINYDIR_PATH_MAX - 1) {
+		realpath_resolved_path[path_len] = DIRSEP;
+		realpath_resolved_path[path_len + 1] = '\0';
+	}
 #endif
-	result = strncat(realpath_resolved_path, filename, _TINYDIR_PATH_MAX - strlen(realpath_resolved_path) - 1);
-	assert(result);
+
+	if (strlen(realpath_resolved_path) + strlen(filename) >= _TINYDIR_PATH_MAX) {
+		SDL_LogError(SDL_LOG_CATEGORY_SYSTEM, "Path too long\n");
+		free(resolved_path);
+		return -1;
+	}
+
+	strcat(realpath_resolved_path, filename);
 
 	cfg_file = fopen(realpath_resolved_path, "w");
-	assert(cfg_file);
+	if (!cfg_file) {
+		SDL_LogError(SDL_LOG_CATEGORY_SYSTEM,
+		             "Failed to create config file: %s\n", realpath_resolved_path);
+		free(resolved_path);
+		return -1;
+	}
 
 	for (size_t i = 0; i < n_opts; i++)
 		write_opt(&option[i], cfg_file);
 
-	fclose(cfg_file);
+	if (fclose(cfg_file) != 0) {
+		SDL_LogError(SDL_LOG_CATEGORY_SYSTEM, "Failed to close config file\n");
+		free(resolved_path);
+		return -1;
+	}
 
 	SDL_Log("Created configuration file at %s\n", realpath_resolved_path);
 
+	free(resolved_path);
 	return 0;
 }
 
@@ -206,7 +280,6 @@ static int
 set_dest_from_value(Option* option, void* value)
 {
 	switch (option->type) {
-		char* tmp_str;
 		size_t tmp_uint;
 		float tmp_float;
 
@@ -258,13 +331,21 @@ set_dest_from_string(Option* option, char* string)
 			}
 			break;
 		case OPT_UINT:
-			ret = sscanf(string, "%ld", &tmp_uint);
-			assert(ret == 1);
+			ret = sscanf(string, "%zu", &tmp_uint);
+			if (ret != 1) {
+				SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
+				             "Invalid unsigned integer value: %s\n", string);
+				break;
+			}
 			set_dest_from_value(option, &tmp_uint);
 			break;
 		case OPT_FLOAT:
 			ret = sscanf(string, "%f", &tmp_float);
-			assert(ret == 1);
+			if (ret != 1) {
+				SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
+				             "Invalid float value: %s\n", string);
+				break;
+			}
 			set_dest_from_value(option, &tmp_float);
 			break;
 		default:
@@ -375,10 +456,11 @@ Option_Init(int argc, char* argv[], Option* option, size_t n_opts)
 	char* config_path = calloc(_TINYDIR_PATH_MAX, sizeof(char));
 	// Option* opt_cfg = malloc(sizeof(Option) * (n_opts + 1));
 	char* cfgpath = get_config_from_opts(argc, argv, option, n_opts);
-	resolve_path(config_path, cfgpath);
-	toml_table_t* config;
+	toml_table_t* config = NULL;
 	FILE* fd;
 	char errbuf[256];
+
+	resolve_path(config_path, cfgpath);
 
 	fd = fopen(config_path, "r+");
 	if (!fd) {

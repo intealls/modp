@@ -2,9 +2,11 @@
 // License: GPL v3
 
 #include <stdlib.h>
-#include <malloc.h>
+#include <stdlib.h>
+#include <unistd.h>
 
 #include <SDL2/SDL.h>
+#include <SDL2/SDL_log.h>
 
 #include <tinydir.h>
 
@@ -287,18 +289,48 @@ Player_Init(int fs, int bits, int channels,
 	Player_State* ps;
 
 	ps = (Player_State*) calloc(1, sizeof(Player_State));
-	assert(ps);
+	if (!ps) {
+		SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to allocate player state\n");
+		return NULL;
+	}
 
 	ps->min_length = min_length;
 	ps->auto_inc = auto_inc;
 	ps->auto_rnd = auto_rnd;
 
 	ps->am = AudioManager_Create(fs, bits, channels);
+	if (!ps->am) {
+		free(ps);
+		return NULL;
+	}
+
 	ps->dir = LocalDir_Create(path);
+	if (!ps->dir) {
+		AudioManager_Destroy(ps->am);
+		free(ps);
+		return NULL;
+	}
 
 	ps->last_input = SDL_GetTicks();
-	// TODO: probably not random enough
-	srand(ps->last_input);
+
+	// Better seeding - combine multiple sources of entropy
+	unsigned int seed = (unsigned int)ps->last_input;
+	seed ^= (unsigned int)(uintptr_t)&seed;  // Address entropy
+	seed ^= (unsigned int)getpid();          // Process ID
+
+#ifdef __linux__
+	// Try to read from /dev/urandom on Linux for additional entropy
+	FILE* urandom = fopen("/dev/urandom", "rb");
+	if (urandom) {
+		unsigned int extra_seed;
+		if (fread(&extra_seed, sizeof(extra_seed), 1, urandom) == 1) {
+			seed ^= extra_seed;
+		}
+		fclose(urandom);
+	}
+#endif
+
+	srand(seed);
 
 	return ps;
 }

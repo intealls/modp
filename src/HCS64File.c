@@ -5,7 +5,7 @@
 #include <stdlib.h>
 #include <stdbool.h>
 #include <string.h>
-#include <malloc.h>
+#include <stdlib.h>
 #include <ctype.h>
 #include <assert.h>
 
@@ -248,7 +248,7 @@ TryOpenHCS64(const void* data,
 	ents = CreateM3UEntries(4, 4);
 
 	while (archive_read_next_header(a, &entry) == ARCHIVE_OK) {
-		size_t len = archive_entry_size(entry);
+		size_t entry_len = archive_entry_size(entry);
 		const char* name = archive_entry_pathname(entry);
 
 		if (name == NULL)
@@ -260,22 +260,36 @@ TryOpenHCS64(const void* data,
 		                  HasExtension(name, "kss"))) {
 			// This uses the first found song in the archive,
 			// multiple songs in a single archive is not supported
-			*song = (char*) malloc(len);
-			assert(*song);
+			*song = (char*) malloc(entry_len);
+			if (!*song) {
+				archive_read_free(a);
+				FreeM3UEntries(ents);
+				return false;
+			}
 
-			*song_len = len;
-			archive_read_data(a, *song, *song_len);
-
-			StrCpy(song_fname, _TINYDIR_PATH_MAX, name);
-
-			got_song = true;
+			*song_len = entry_len;
+			ssize_t bytes_read = archive_read_data(a, *song, entry_len);
+			if (bytes_read != (ssize_t)entry_len) {
+				free(*song);
+				*song = NULL;
+				// Continue to try other files
+			} else {
+				StrCpy(song_fname, _TINYDIR_PATH_MAX, name);
+				got_song = true;
+			}
 		} else if (HasExtension(name, "m3u")) {
-			char* m3u_entry = (char*) malloc(len);
-			assert(m3u_entry);
+			char* m3u_entry = (char*) malloc(entry_len);
+			if (!m3u_entry) {
+				continue;
+			}
 
-			archive_read_data(a, m3u_entry, len);
+			ssize_t bytes_read = archive_read_data(a, m3u_entry, entry_len);
+			if (bytes_read != (ssize_t)entry_len) {
+				free(m3u_entry);
+				continue;
+			}
 
-			AddM3UEntry(ents, name, m3u_entry, len);
+			AddM3UEntry(ents, name, m3u_entry, entry_len);
 		}
 	}
 

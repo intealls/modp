@@ -2,13 +2,14 @@
 #include <assert.h>
 #include <stdbool.h>
 #include <string.h>
-#include <malloc.h>
+#include <stdlib.h>
 #include <stddef.h>
 
 #include "../3rdparty/hvl/hvl_replay.h"
 #include "HVLRenderer.h"
 #include "Globals.h"
 #include "Utils.h"
+#include "VTableInit.h"
 
 #define HVL_FREQ 48000
 #define HIVELY_LEN HVL_FREQ/50
@@ -37,13 +38,11 @@ HVLRenderer_Load(const AudioRenderer* obj,
                  const void* data,
                  const size_t len)
 {
-    const char* hvl_str = NULL;
-    const char* source = NULL;
-    int i;
-    int8 b1[8][(HVL_FREQ*2*2)/50];
-    int8 b2[8][(HVL_FREQ*2*2)/50];
-    size_t frames_total = 0;
-    int nb = 0;
+	const char* hvl_str = NULL;
+	const char* source = NULL;
+	int i;
+	size_t info_len = 0;
+	const size_t max_info_len = MODP_STR_LENGTH - 1;
 
 	DataObject(rndr_data, obj);
 
@@ -54,24 +53,52 @@ HVLRenderer_Load(const AudioRenderer* obj,
 
 	hvl_str = rndr_data->hvl->ht_Name;
 	source = (hvl_str != NULL && *hvl_str) ? hvl_str : filename;
-	for (i=1; i <= rndr_data->hvl->ht_InstrumentNr; i++) {
-		strcat(rndr_data->info, rndr_data->hvl->ht_Instruments[i].ins_Name);
-		if (i < rndr_data->hvl->ht_InstrumentNr) {
-			strcat(rndr_data->info, "\n");
-		}
-	};
 
-	strcat(rndr_data->info, "\0");
+	// Safe string concatenation with bounds checking
+	for (i = 1; i <= rndr_data->hvl->ht_InstrumentNr && info_len < max_info_len; i++) {
+		const char* name = rndr_data->hvl->ht_Instruments[i].ins_Name;
+		size_t name_len = strlen(name);
+		size_t newline_len = (i < rndr_data->hvl->ht_InstrumentNr) ? 1 : 0;
+
+		if (info_len + name_len + newline_len > max_info_len) {
+			// Truncate if running out of space
+			size_t remaining = max_info_len - info_len;
+			if (remaining > 0) {
+				memcpy(rndr_data->info + info_len, name, remaining);
+				info_len += remaining;
+			}
+			break;
+		}
+
+		strcpy(rndr_data->info + info_len, name);
+		info_len += name_len;
+
+		if (newline_len > 0) {
+			rndr_data->info[info_len++] = '\n';
+		}
+	}
+	rndr_data->info[info_len] = '\0';
+
 	StrCpy(rndr_data->title, MODP_STR_LENGTH, source);
 
-	/* inelegantly get the song length,
-       this should probably be part of hvl_replay instead
-    */
-	while(!rndr_data->hvl->ht_SongEndReached) {
-        hvl_DecodeFrame(rndr_data->hvl, (int8*) b1[nb], (int8*) b2[nb]+2, 2);
-        frames_total += HIVELY_LEN;
-        nb = (nb+1)%8;
-    }
+	// Calculate song length with safety limit to prevent infinite loops
+	size_t frames_total = 0;
+	int8 b1[8][(HVL_FREQ*2*2)/50];
+	int8 b2[8][(HVL_FREQ*2*2)/50];
+	int nb = 0;
+
+	while(!rndr_data->hvl->ht_SongEndReached && frames_total < HVL_MAX_FRAMES) {
+		// Fix the buffer offset issue - was b2[nb]+2, should be b2[nb]
+		hvl_DecodeFrame(rndr_data->hvl, (int8*) b1[nb], (int8*) b2[nb], 2);
+		frames_total += HIVELY_LEN;
+		nb = (nb+1) % 8;
+	}
+
+	if (frames_total >= HVL_MAX_FRAMES) {
+		// Log warning about potentially malformed file
+		fprintf(stderr, "HVLRenderer: Maximum frame limit reached, possible infinite loop\n");
+	}
+
 	rndr_data->track_length = frames_total;
 	return 0;
 }
@@ -247,40 +274,46 @@ HVLRenderer_SetTrack(const AudioRenderer* obj, int track)
 	return HVLRenderer_Track(obj);
 }
 
+static AudioRenderer_VTable* HVLRenderer_InitVTable(void) {
+	static AudioRenderer_VTable _vtable;
+	memset((void*) &_vtable, 0, sizeof(AudioRenderer_VTable));
+
+	_vtable.Load     = (*HVLRenderer_Load);
+	_vtable.CanLoad  = (*HVLRenderer_CanLoad);
+	_vtable.Loaded   = (*HVLRenderer_Loaded);
+	_vtable.UnLoad   = (*HVLRenderer_UnLoad);
+	_vtable.Render   = (*HVLRenderer_Render);
+	_vtable.Title    = (*HVLRenderer_Title);
+	_vtable.Info     = (*HVLRenderer_Info);
+	_vtable.Track    = (*HVLRenderer_Track);
+	_vtable.NTracks  = (*HVLRenderer_NTracks);
+	_vtable.SetTrack = (*HVLRenderer_SetTrack);
+	_vtable.PlayTime = (*HVLRenderer_PlayTime);
+	_vtable.Length   = (*HVLRenderer_Length);
+	_vtable.Destroy  = (*HVLRenderer_Destroy);
+
+	return &_vtable;
+}
+
 AudioRenderer*
 HVLRenderer_Create(int fs, int bits, int channels)
 {
 	AudioRenderer* arndr;
 	HVLRenderer_Data* rndr_data;
 	hvl_InitReplayer();
-	static AudioRenderer_VTable _vtable;
-	static bool _initialized = false;
 
-	if (!_initialized) {
-		memset((void*) &_vtable, 0, sizeof(AudioRenderer_VTable));
+	static AudioRenderer_VTable* _vtable_ptr = NULL;
 
-		_vtable.Load     = (*HVLRenderer_Load);
-		_vtable.CanLoad  = (*HVLRenderer_CanLoad);
-		_vtable.Loaded   = (*HVLRenderer_Loaded);
-		_vtable.UnLoad   = (*HVLRenderer_UnLoad);
-		_vtable.Render   = (*HVLRenderer_Render);
-		_vtable.Title    = (*HVLRenderer_Title);
-		_vtable.Info     = (*HVLRenderer_Info);
-		_vtable.Track    = (*HVLRenderer_Track);
-		_vtable.NTracks  = (*HVLRenderer_NTracks);
-		_vtable.SetTrack = (*HVLRenderer_SetTrack);
-		_vtable.PlayTime = (*HVLRenderer_PlayTime);
-		_vtable.Length   = (*HVLRenderer_Length);
-		_vtable.Destroy  = (*HVLRenderer_Destroy);
-
-		_initialized = true;
-	}
+	VTABLE_INIT_ONCE(AudioRenderer_VTable, _vtable_ptr, HVLRenderer_InitVTable);
 
 	arndr = (AudioRenderer*) calloc(1, sizeof(AudioRenderer));
-	assert(arndr);
+	if (!arndr) return NULL;
 
 	rndr_data = (HVLRenderer_Data*) calloc(1, sizeof(HVLRenderer_Data));
-	assert(rndr_data);
+	if (!rndr_data) {
+		free(arndr);
+		return NULL;
+	}
 
 	rndr_data->fs = fs;
 	rndr_data->bits = bits;
@@ -289,7 +322,7 @@ HVLRenderer_Create(int fs, int bits, int channels)
 	rndr_data->current_track = -1;
 	rndr_data->track_length = -1;
 
-	arndr->vtable = &_vtable;
+	arndr->vtable = _vtable_ptr;
 	arndr->data = (void*) rndr_data;
 
 	return arndr;

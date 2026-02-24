@@ -2,7 +2,7 @@
 // License: GPL v3
 
 #include <assert.h>
-#include <malloc.h>
+#include <stdlib.h>
 #include <stdio.h>
 #include <sys/stat.h>
 
@@ -184,29 +184,45 @@ LocalDir_ReadFile(const char* path,
                   size_t* len,
                   size_t max_len)
 {
-	struct stat st;
 	char* data;
 	FILE* f;
 
-	if (stat(path, &st) == -1 || !S_ISREG(st.st_mode)
-	                          || st.st_size <= 0
-	                          || (size_t) st.st_size >= max_len
-	                          || (f = fopen(path, "rb")) == NULL)
+	// Use fopen first, then fstat on the open file descriptor to avoid TOCTOU
+	f = fopen(path, "rb");
+	if (f == NULL)
 		return NULL;
 
-	data = (char*) calloc(st.st_size, 1);
-	assert(fread(data, 1, st.st_size, f) == (size_t) st.st_size);
+	struct stat st;
+	if (fstat(fileno(f), &st) == -1 || !S_ISREG(st.st_mode)
+	    || st.st_size <= 0
+	    || st.st_size > (off_t)max_len) {
+		fclose(f);
+		return NULL;
+	}
 
-	*len = st.st_size;
+	// Check for size_t overflow on 32-bit systems
+	if ((size_t)st.st_size > SIZE_MAX - 16) {
+		fclose(f);
+		return NULL;
+	}
 
-	if (ferror(f) != 0) {
+	data = (char*) calloc((size_t)st.st_size, 1);
+	if (data == NULL) {
+		fclose(f);
+		return NULL;
+	}
+
+	size_t bytes_read = fread(data, 1, (size_t)st.st_size, f);
+	if (bytes_read != (size_t)st.st_size || ferror(f) != 0) {
 		free(data);
-		data = NULL;
+		fclose(f);
 		*len = 0;
+		return NULL;
 	}
 
 	fclose(f);
 
+	*len = st.st_size;
 	return (void*) data;
 }
 
@@ -308,12 +324,18 @@ LocalDir_MakeEntry(const char* path)
 	tinydir_dir dir;
 
 	e = (LocalDir_Entry*) calloc(1, sizeof(LocalDir_Entry));
-	assert(e);
+	if (!e) return NULL;
 
 	e->subdir_idx = 0;
 	e->next = e->prev = NULL;
-	e->files = (tinydir_file*) malloc(sizeof(tinydir_file));
-	assert(e->files);
+
+	// Pre-allocate with reasonable capacity and use geometric growth
+	size_t capacity = 32;
+	e->files = (tinydir_file*) malloc(capacity * sizeof(tinydir_file));
+	if (!e->files) {
+		free(e);
+		return NULL;
+	}
 
 	if (-1 == tinydir_open(&dir, path))
 		goto fail;
@@ -330,6 +352,17 @@ LocalDir_MakeEntry(const char* path)
 		if (strncmp(f.name, ".", _TINYDIR_PATH_MAX - 1) == 0)
 			continue;
 
+		// Check if we need to expand capacity
+		if (e->n_files + e->n_dirs >= capacity) {
+			capacity *= 2;  // Double the capacity
+			tinydir_file* new_files = (tinydir_file*) realloc(e->files,
+			                                                   capacity * sizeof(tinydir_file));
+			if (!new_files) {
+				goto fail;
+			}
+			e->files = new_files;
+		}
+
 		if (f.is_dir || f.is_reg)
 			e->files[e->n_files + e->n_dirs] = f;
 
@@ -337,14 +370,16 @@ LocalDir_MakeEntry(const char* path)
 			e->n_dirs++;
 		else if (f.is_reg)
 			e->n_files++;
-
-		e->files = (tinydir_file*) realloc(e->files,
-		                                   (1 + e->n_files + e->n_dirs) *
-		                                       sizeof(tinydir_file));
-		assert(e->files);
 	}
 
 	tinydir_close(&dir);
+
+	// Shrink to fit
+	tinydir_file* final_files = (tinydir_file*) realloc(e->files,
+	                                                    (e->n_files + e->n_dirs) * sizeof(tinydir_file));
+	if (final_files) {
+		e->files = final_files;
+	}
 
 	LocalDir_StrCpy(e->path, path);
 

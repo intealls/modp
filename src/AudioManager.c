@@ -2,6 +2,7 @@
 // License: GPL v3
 
 #include <stdio.h>
+#include <SDL2/SDL_log.h>
 
 #include <portaudio.h>
 
@@ -78,15 +79,15 @@ AudioManager_TryLoad(AudioManager* am,
 
 	if (!AudioRenderer_Load(rend, filename, data, len)) {
 		am->pa_err = Pa_StartStream(am->stream);
-		am->playing = true;
+		atomic_store_explicit(&am->playing, true, memory_order_release);
 		am->active_ar = rend;
-		atomic_store(&am->cb_msg, CBM_CLR_BUF);
+		atomic_store_explicit(&am->cb_msg, CBM_CLR_BUF, memory_order_release);
 
 		return 0;
 	}
 
 	am->pa_err = Pa_StopStream(am->stream);
-	am->playing = false;
+	atomic_store_explicit(&am->playing, false, memory_order_release);
 
 	return 1;
 }
@@ -148,7 +149,7 @@ AudioManager_AlterSubTrack(AudioManager* am, int val)
 
 	if (track_sel >= 0 && track_sel < ntracks) {
 		r = AudioRenderer_SetTrack(am->active_ar, track_sel);
-		atomic_store(&am->cb_msg, CBM_CLR_BUF);
+		atomic_store_explicit(&am->cb_msg, CBM_CLR_BUF, memory_order_release);
 	}
 
 	SDL_UnlockMutex(am->mutex);
@@ -163,10 +164,10 @@ AudioManager_SilenceDetected(AudioManager* am)
 
 	assert(am);
 
-	if (atomic_load(&am->rt_msg) == RTM_AUTO_INC)
+	if (atomic_load_explicit(&am->rt_msg, memory_order_acquire) == RTM_AUTO_INC)
 		r = true;
 
-	atomic_store(&am->rt_msg, RTM_NONE);
+	atomic_store_explicit(&am->rt_msg, RTM_NONE, memory_order_release);
 
 	return r;
 }
@@ -179,9 +180,26 @@ RenderThread(void* data)
 
 	size_t silence_count = 0;
 
-	T* temp = (T*) calloc(MODP_RNDR_BUF_SEC * am->fs * am->channels,
-	                      sizeof(T));
-	assert(temp);
+	// Check for integer overflow before allocation
+	if (am->fs <= 0 || am->channels <= 0) {
+		SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
+		             "AudioManager: Invalid audio parameters\n");
+		return -1;
+	}
+
+	size_t num_samples = (size_t)MODP_RNDR_BUF_SEC * (size_t)am->fs * (size_t)am->channels;
+	if (num_samples / MODP_RNDR_BUF_SEC / (size_t)am->fs != (size_t)am->channels) {
+		SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
+		             "AudioManager: Buffer size would overflow\n");
+		return -1;
+	}
+
+	T* temp = (T*) calloc(num_samples, sizeof(T));
+	if (!temp) {
+		SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
+		             "AudioManager: Failed to allocate buffer\n");
+		return -1;
+	}
 
 	while (am->running) {
 		size_t rb_ct = RingBuffer_Count(am->render_buf);
@@ -197,7 +215,7 @@ RenderThread(void* data)
 
 		SDL_LockMutex(am->mutex);
 
-		if (atomic_load(&am->playing) && rb_ct < samples
+		if (atomic_load_explicit(&am->playing, memory_order_acquire) && rb_ct < samples
 		        && AudioRenderer_Loaded(am->active_ar)) {
 			rendered = AudioRenderer_Render(am->active_ar,
 			                                temp,
@@ -208,10 +226,10 @@ RenderThread(void* data)
 
 		SDL_UnlockMutex(am->mutex);
 
-		if (atomic_load(&am->rt_msg) == RTM_NONE
-		        && atomic_load(&am->playing)) {
+		if (atomic_load_explicit(&am->rt_msg, memory_order_acquire) == RTM_NONE
+		        && atomic_load_explicit(&am->playing, memory_order_acquire)) {
 			rendered /= sizeof(T);
-			for (size_t i = 0; rendered > 0 && i <= rendered - 4; i += 2) {
+			for (size_t i = 0; rendered > 0 && i <= rendered - SILENCE_THRESHOLD_FRAMES; i += 2) {
 				int l_diff = temp[i + 0] - temp[i + 2];
 				int r_diff = temp[i + 1] - temp[i + 3];
 
@@ -223,7 +241,7 @@ RenderThread(void* data)
 		}
 
 		if (silence_count > am->max_silence) {
-			atomic_store(&am->rt_msg, RTM_AUTO_INC);
+			atomic_store_explicit(&am->rt_msg, RTM_AUTO_INC, memory_order_release);
 			silence_count = 0;
 		}
 	}
@@ -250,9 +268,9 @@ PortAudio_Callback(const void* in, void* out,
 	int to_write;
 	int written;
 
-	if (atomic_load(&am->cb_msg) == CBM_CLR_BUF) {
+	if (atomic_load_explicit(&am->cb_msg, memory_order_acquire) == CBM_CLR_BUF) {
 		RingBuffer_ConsumerClear(am->render_buf);
-		atomic_store(&am->cb_msg, CBM_NONE);
+		atomic_store_explicit(&am->cb_msg, CBM_NONE, memory_order_release);
 	}
 
 	to_write = frames * am->channels;
@@ -285,7 +303,7 @@ PortAudio_Init(AudioManager* am)
 	                                  am->channels,
 	                                  paInt16,
 	                                  am->fs,
-	                                  1536,
+	                                  PORTAUDIO_FRAMES_PER_BUFFER,
 	                                  PortAudio_Callback,
 	                                  (void*) am);
 
@@ -377,9 +395,9 @@ AudioManager_Create(int fs, int bits, int channels)
 
 	am->active_ar = am->ars[0];
 
-	// TODO: Fix buffer sizes and set them to sane values
-	am->render_buf = RingBuffer_Create(MODP_RNDR_BUF_SEC * fs * channels, 2);
-	am->playback_buf = RingBuffer_Create(fs / 16, 2);
+	// Use named constants for buffer sizes
+	am->render_buf = RingBuffer_Create(MODP_RNDR_BUF_SEC * fs * channels, RINGBUFFER_RENDER_RESERVE);
+	am->playback_buf = RingBuffer_Create(fs / 16, RINGBUFFER_PLAYBACK_RESERVE);
 
 	am->mutex = SDL_CreateMutex();
 	assert(am->mutex);

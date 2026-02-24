@@ -1,6 +1,17 @@
 CC = cc
 CXX = c++
-WARNINGS = -pedantic -Wall -Wextra -Wno-unused-function -Wno-overlength-strings
+WARNINGS = -pedantic \
+           -Wall \
+           -Wextra \
+           -Wformat=2 \
+           -Wformat-security \
+           -Wnull-dereference \
+           -Wshadow \
+           -Wwrite-strings \
+           -Wvla \
+           -Warray-bounds=2 \
+           -Wno-unused-function \
+           -Wno-overlength-strings
 CFLAGS = -fno-omit-frame-pointer -O3 -march=native $(WARNINGS) -std=c11 -D_USE_MATH_DEFINES -D_DEFAULT_SOURCE
 CXXFLAGS = -fno-omit-frame-pointer -O3 -march=native $(WARNINGS) -D_USE_MATH_DEFINES -D_DEFAULT_SOURCE
 LIBS =  -L/usr/local/lib/ -lxmp -lsidplayfp -lportaudio -lgme -larchive -lSDL2_image -lSDL2
@@ -37,10 +48,17 @@ all: release
 
 release: directories executable
 
-debug: CFLAGS := -g3 -O0 $(WARNINGS) -fsanitize=address
-debug: CXXFLAGS := -g3 -O0 $(WARNINGS) -fsanitize=address
+debug: CFLAGS := -g3 -O0 $(WARNINGS) -fsanitize=address,undefined -fno-omit-frame-pointer
+debug: CXXFLAGS := -g3 -O0 $(WARNINGS) -fsanitize=address,undefined -fno-omit-frame-pointer
 debug: NAME := $(NAME)_dbg
 debug: directories executable
+
+# Static analysis target (requires clang-tidy and cppcheck)
+analyze:
+	@echo "Running clang-tidy..."
+	clang-tidy src/*.c -- $(INCLUDE) $(WARNINGS) -std=c11 2>&1 || true
+	@echo "Running cppcheck..."
+	cppcheck --enable=all --suppress=missingIncludeSystem src/*.c 2>&1 || true
 
 directories:
 	mkdir -p $(ODIR)
