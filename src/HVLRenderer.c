@@ -41,15 +41,8 @@ HVLRenderer_Load(const AudioRenderer* obj,
 	const char* hvl_str = NULL;
 	const char* source = NULL;
 	int i;
-<<<<<<< HEAD
 	size_t info_len = 0;
 	const size_t max_info_len = MODP_STR_LENGTH - 1;
-=======
-	int8 b1[8][(HVL_FREQ*2*2)/50];
-	int8 b2[8][(HVL_FREQ*2*2)/50];
-	size_t frames_total = 0;
-	int nb = 0;
->>>>>>> 41a67b4 (Cleanups)
 
 	DataObject(rndr_data, obj);
 
@@ -88,7 +81,6 @@ HVLRenderer_Load(const AudioRenderer* obj,
 
 	StrCpy(rndr_data->title, MODP_STR_LENGTH, source);
 
-<<<<<<< HEAD
 	// Calculate song length with safety limit to prevent infinite loops
 	size_t frames_total = 0;
 	int8 b1[8][(HVL_FREQ*2*2)/50];
@@ -107,16 +99,6 @@ HVLRenderer_Load(const AudioRenderer* obj,
 		fprintf(stderr, "HVLRenderer: Maximum frame limit reached, possible infinite loop\n");
 	}
 
-=======
-	/* inelegantly get the song length,
-	   this should probably be part of hvl_replay instead
-	*/
-	while(!rndr_data->hvl->ht_SongEndReached) {
-		hvl_DecodeFrame(rndr_data->hvl, (int8*) b1[nb], (int8*) b2[nb]+2, 2);
-		frames_total += HIVELY_LEN;
-		nb = (nb+1) % 8;
-	}
->>>>>>> 41a67b4 (Cleanups)
 	rndr_data->track_length = frames_total;
 	return 0;
 }

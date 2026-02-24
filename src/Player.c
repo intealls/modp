@@ -2,7 +2,6 @@
 // License: GPL v3
 
 #include <stdlib.h>
-#include <stdlib.h>
 #include <unistd.h>
 
 #include <SDL2/SDL.h>
@@ -218,6 +217,9 @@ Player_UpdateAutoInc(Player_State* ps,
 	}
 
 	t_now = SDL_GetTicks();
+
+	if (!ps->am->active_ar)
+		return;
 
 	if ((AudioRenderer_PlayTime(ps->am->active_ar) >=
 	        AudioRenderer_Length(ps->am->active_ar) &&

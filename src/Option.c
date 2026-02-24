@@ -2,10 +2,8 @@
 // Licence: GPL v3
 
 #include <SDL2/SDL_assert.h>
-#include <bits/getopt_core.h>
 #include <errno.h>
 #include <stdio.h>
-#include <stdlib.h>
 #include <stdlib.h>
 #include <stdbool.h>
 #include <stdint.h>
@@ -194,7 +192,7 @@ create_config(Option* option, size_t n_opts, const char* path)
 		return -1;
 	}
 
-	sscanf(result + 1, "%s", filename);
+	StrCpy(filename, sizeof(filename), result + 1);
 	if (strlen(filename) == 0) {
 		SDL_LogError(SDL_LOG_CATEGORY_SYSTEM, "Empty filename\n");
 		free(resolved_path);
@@ -358,6 +356,9 @@ set_dest_from_string(Option* option, char* string)
 static int
 config_lookup_set_dest(toml_table_t* config, Option* option)
 {
+	if (!config)
+		return 0;
+
 	toml_datum_t d;
 	switch (option->type) {
 		case OPT_STRING:
@@ -366,6 +367,7 @@ config_lookup_set_dest(toml_table_t* config, Option* option)
             if ((strcmp(d.u.s, "") != 0) && (strcmp(d.u.s, option->initial.str) != 0)) {
 			    StrCpy((char*) option->dest, _TINYDIR_PATH_MAX, d.u.s);
             }
+            free(d.u.s);
         }
 			break;
 		case OPT_BOOL:
@@ -399,7 +401,7 @@ config_lookup_set_dest(toml_table_t* config, Option* option)
 	return 0;
 }
 
-char*
+static char*
 get_config_from_opts(int argc, char* argv[], Option* option, size_t n_opts)
 {
     //TODO make this function less weird
@@ -456,6 +458,7 @@ Option_Init(int argc, char* argv[], Option* option, size_t n_opts)
 	char* config_path = calloc(_TINYDIR_PATH_MAX, sizeof(char));
 	// Option* opt_cfg = malloc(sizeof(Option) * (n_opts + 1));
 	char* cfgpath = get_config_from_opts(argc, argv, option, n_opts);
+	optind = 1;
 	toml_table_t* config = NULL;
 	FILE* fd;
 	char errbuf[256];
@@ -528,21 +531,28 @@ Option_Init(int argc, char* argv[], Option* option, size_t n_opts)
 			case OPT_NULL:
 				if (!strcmp("help", tmp_option->long_name)) {
 					print_help(option, n_opts);
+					if (config) toml_free(config);
+					free(config_path);
 					exit(0);
 				}
 				if (!strcmp("createconfig", tmp_option->long_name)) {
 					create_config(option, n_opts, (const char*) config_path);
+					if (config) toml_free(config);
+					free(config_path);
 					exit(0);
 				}
 				if (!strcmp("showconfig", tmp_option->long_name)) {
 					for (size_t i = 0; i < n_opts; i++)
 						write_opt(&option[i], stdout);
+					if (config) toml_free(config);
+					free(config_path);
 					exit(0);
 				}
 				break;
 		}
 	}
 
+	if (config) toml_free(config);
     free(config_path);
 	return 0;
 }
