@@ -343,13 +343,11 @@ GLUI_Draw(GLWindow_State* wdw)
 
 	glColor4ub(GRAY(48, 64));
 	GL_DrawRec(0, y, wdw->width, wdw->font->font_height * zoom * wdw->max_items, true, wdw->width, wdw->height);
-
 	Font_DrawString(wdw,
 	                "\\ffffffff-> ",
 	                x - (3 * wdw->font->font_width * zoom),
 	                y - (wdw->font->font_height * zoom),
 	                zoom);
-
 	for (size_t i = 0; i < wdw->max_items; i++) {
 		bool isdir;
 		const char* name = Directory_GetName(wdw->ps->dir,
@@ -571,6 +569,7 @@ GLWindow_Init(Options* opt, Player_State* ps)
 	gl_wdw->fps_limit = opt->fps_limit;
 	gl_wdw->font_shake_factor = opt->font_shake_factor;
 	gl_wdw->font_zoom_factor = opt->font_zoom_factor;
+	gl_wdw->font_rotation_factor = opt->font_rotation_factor;
 	gl_wdw->bg_flash_factor = opt->bg_flash_factor;
 
 	gl_wdw->clrcolor[0] = opt->clr_r;

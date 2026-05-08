@@ -34,6 +34,7 @@ typedef struct Options {
 	float clr_b;
 	float font_shake_factor;
 	float font_zoom_factor;
+	float font_rotation_factor;
 	float bg_flash_factor;
 } Options;
 
@@ -85,6 +86,7 @@ struct GLWindow_State {
 	float clrcolor[3];
 	float font_shake_factor;
 	float font_zoom_factor;
+	float font_rotation_factor;
 	float bg_flash_factor;
 };
 

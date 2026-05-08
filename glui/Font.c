@@ -2,6 +2,7 @@
 // License: GPL v3
 
 #include <stdint.h>
+#include <math.h>
 
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_opengl.h>
@@ -61,11 +62,10 @@ Font_DrawString(GLWindow_State* wdw, const char* str, int x, int y, int zoom)
 	while (*str != '\0' && line_breaks < wdw->max_items) {
 		glPushMatrix();
 		glTranslatef(x, y, 0.f);
-		glBegin(GL_QUADS);
-		{
-			while (*str != '\0') {
+		while (*str != '\0') {
 				float rnd_x = ((((float)rand() / RAND_MAX) - 0.5) * jit_factor) * wdw->font_shake_factor;
 				float rnd_y = ((((float)rand() / RAND_MAX) - 0.5) * jit_factor) * wdw->font_shake_factor;
+				float rot_angle = ((((float)rand() / RAND_MAX) - 0.5) * jit_factor) * wdw->font_rotation_factor;
 
 				if (*str == '\\') {
 					if (hc_to_rgba((str + 1), wdw->font->color)) {
@@ -89,29 +89,47 @@ Font_DrawString(GLWindow_State* wdw, const char* str, int x, int y, int zoom)
 				float th = wdw->font->tex_height;
 				float zoom_x = zoom * ((((float)rand() / RAND_MAX)) * jit_factor) * wdw->font_zoom_factor;
 
+				// Rotate and shake the outline around its center
+				glPushMatrix();
+				glTranslatef(fw * (pos + 0.5f) * zoom + 2 + rnd_x,
+				             fh * zoom / 2 - 2 + rnd_y, 0.f);
+				glRotatef(rot_angle, 0.f, 0.f, 1.f);
+				glTranslatef(-fw * (pos + 0.5f) * zoom - 2,
+				             -fh * zoom / 2 + 2, 0.f);
+
+				glBegin(GL_QUADS);
 				glColor4ub(0, 0, 0, 255);
-
 				glTexCoord2f(fw * (*str + 0) / tw, fh / th);
-				glVertex2i(      fw * pos * zoom + 2 + rnd_x - zoom_x, -2 + rnd_y - zoom_x); // 0, 0
+				glVertex2f(fw * pos * zoom + 2 - zoom_x, -2 - zoom_x);
 				glTexCoord2f(fw * (*str + 1) / tw, fh / th);
-				glVertex2i(fw * (pos + 1) * zoom + 2 + rnd_x + zoom_x, -2 + rnd_y - zoom_x); // 1, 0
-
+				glVertex2f(fw * (pos + 1) * zoom + 2 + zoom_x, -2 - zoom_x);
 				glTexCoord2f(fw * (*str + 1) / tw, 0);
-				glVertex2i(fw * (pos + 1) * zoom + 2 + rnd_x + zoom_x, fh * zoom - 2 + rnd_y + zoom_x); // 1, 1
+				glVertex2f(fw * (pos + 1) * zoom + 2 + zoom_x, fh * zoom - 2 + zoom_x);
 				glTexCoord2f(fw * (*str + 0) / tw, 0);
-				glVertex2i(      fw * pos * zoom + 2 + rnd_x - zoom_x, fh * zoom - 2 + rnd_y + zoom_x); // 0, 1
+				glVertex2f(fw * pos * zoom + 2 - zoom_x, fh * zoom - 2 + zoom_x);
+				glEnd();
+				glPopMatrix();
 
+				// Rotate and shake the fill around its center
+				glPushMatrix();
+				glTranslatef(fw * (pos + 0.5f) * zoom + rnd_x,
+				             fh * zoom / 2 + rnd_y, 0.f);
+				glRotatef(rot_angle, 0.f, 0.f, 1.f);
+				glTranslatef(-fw * (pos + 0.5f) * zoom,
+				             -fh * zoom / 2, 0.f);
+
+				glBegin(GL_QUADS);
 				glColor4ubv((const GLubyte*) wdw->font->color);
-
 				glTexCoord2f(fw * (*str + 0) / tw, fh / th);
-				glVertex2i(      fw * pos * zoom + rnd_x - zoom_x, rnd_y - zoom_x); // 0, 0
+				glVertex2f(fw * pos * zoom - zoom_x, -zoom_x);
 				glTexCoord2f(fw * (*str + 1) / tw, fh / th);
-				glVertex2i(fw * (pos + 1) * zoom + rnd_x + zoom_x, rnd_y - zoom_x); // 1, 0
-
+				glVertex2f(fw * (pos + 1) * zoom + zoom_x, -zoom_x);
 				glTexCoord2f(fw * (*str + 1) / tw, 0);
-				glVertex2i(fw * (pos + 1) * zoom + rnd_x + zoom_x, fh * zoom + rnd_y + zoom_x); // 1, 1
+				glVertex2f(fw * (pos + 1) * zoom + zoom_x, fh * zoom + zoom_x);
 				glTexCoord2f(fw * (*str + 0) / tw, 0);
-				glVertex2i(      fw * pos * zoom + rnd_x - zoom_x, fh * zoom + rnd_y + zoom_x); // 0, 1
+				glVertex2f(fw * pos * zoom - zoom_x, fh * zoom + zoom_x);
+				glEnd();
+				glPopMatrix();
 
 				str++;
 				pos++;
@@ -124,8 +142,6 @@ Font_DrawString(GLWindow_State* wdw, const char* str, int x, int y, int zoom)
 					break;
 				}
 			}
-		}
-		glEnd();
 		glPopMatrix();
 	}
 	GL_OrthoOff();
