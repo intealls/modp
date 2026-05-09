@@ -211,6 +211,7 @@ GLUI_DrawVis(GLWindow_State* wdw)
 			}
 		}
 		glEnd();
+		GL_OrthoOff();
 	}
 
 	scale = 192.f;
@@ -269,6 +270,7 @@ GLUI_DrawVis(GLWindow_State* wdw)
 			}
 		}
 		glEnd();
+		GL_OrthoOff();
 	}
 
 	GLUI_DrawStars(wdw, true);
