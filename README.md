@@ -28,32 +28,88 @@ Command line options:
 
 ## Building
 
-#### Windows/Linux
+### Dependencies
+
+All platforms require the following libraries:
+
+| Library | Purpose |
+|---|---|
+| SDL2 | Window/input |
+| SDL2_image | Image loading (fonts) |
+| OpenGL / GLU | Graphics (GL UI) |
+| ncurses | Terminal UI (CLI) |
+| fftw3 | FFT visualization |
+| portaudio | Audio playback |
+| libsidplayfp | Commodore 64 SID playback |
+| libxmp | .mod/.s3m/.xm playback |
+| libgme | Game music emulation |
+| libopenmpt | Tracker module playback (**optional**) |
+| libarchive | Archive reading |
+
+#### Arch Linux
+
+```bash
+sudo pacman -S base-devel cmake sdl2 sdl2_image libglu portaudio fftw libsidplayfp libxmp libgme libarchive ncurses
+# Optional: sudo pacman -S libopenmpt   (required if -DENABLE_OPENMPT=ON)
+```
+
+#### Ubuntu (22.04+)
+
+```bash
+sudo apt update
+sudo apt install build-essential cmake libsdl2-dev libsdl2-image-dev libglu1-mesa-dev libfftw3-dev portaudio19-dev libsidplayfp-dev libxmp-dev libgme-dev libarchive-dev libncurses-dev
+# Optional: sudo apt install libopenmpt-dev   (required if -DENABLE_OPENMPT=ON)
+```
+
+### CMake (recommended)
+
+```bash
+git clone https://github.com/intealls/modp.git
+cd modp
+mkdir build && cd build
+cmake .. -DCMAKE_INSTALL_PREFIX=/usr/local
+cmake --build .
+```
+
+Binaries are placed in `build/bin/` (`modp-gl`, `modp-cli`).
+
+Options:
+
+| Flag | Default | Description |
+|---|---|---|
+| `-DBUILD_GLUI=ON` | ON | Build the OpenGL UI |
+| `-DBUILD_NCURSES=ON` | ON | Build the ncurses UI |
+| `-DBUILD_DEBUG=OFF` | OFF | Debug build with sanitizers |
+| `-DENABLE_OPENMPT=ON` | OFF | Enable libopenmpt tracker module backend |
+
+### Makefile (legacy)
 
 Uses MSYS2 on Windows.
 
 - Download libopenmpt from [here](https://lib.openmpt.org/libopenmpt/download), build and install.
 - Download game-music-emu 0.6.2, from [here](https://bitbucket.org/mpyne/game-music-emu/downloads), apply `contrib/gme-0.6.2-playlist_patch.diff`, build and install (use -G "MSYS Makefiles" if on Windows). The patch improves playlist compatibility with music files from \*.joshw.info.
 - Install prerequisites (libportaudio, libarchive, SDL2, fftw etc).
-- run `./configure && make`
-Building on ubuntu +22:
-```
-sudo apt update
-sudo apt install build-essential git cmake libsdl2-dev libarchive-dev portaudio19-dev libxmp-dev libopenmpt-dev libfftw3-dev libsidplayfp-dev
+- run `make`
+
+#### Ubuntu with patched libgme
+
+If you need the playlist patch for libgme:
+
+```bash
 git clone https://github.com/intealls/modp.git
 cd modp
 git clone https://bitbucket.org/mpyne/game-music-emu.git
 cd game-music-emu/
 # patch, build and install gme
 patch -p1 < ../contrib/gme-b3d158a-playlist.patch
-mkdir build
-cd build
-cmake ../ -DCMAKE_INSTALL_PREFIX=/usr/local
+mkdir build && cd build
+cmake .. -DCMAKE_INSTALL_PREFIX=/usr/local
 make && make install
-cd ..
+cd ../..
 # build modp
-./configure
-make
+mkdir build && cd build
+cmake ..
+cmake --build .
 ```
 ## Notes
 
