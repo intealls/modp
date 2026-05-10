@@ -9,22 +9,46 @@ Currently supported backends are libopenmpt and game music emulator. Should play
 
 Command line options:
 
-```
--p    Initial path, default is "."
--f    Path to a BDF font, default is an internal font
--v    Pixel-double font vertically, default is 0
--a    Auto increment at min length/song end, default is 1
--n    Random song at auto increment, default is 0
--m    Song minimum length, default is 0
--w    Window width, default is 800
--e    Window height, default is 480
--l    Framerate limit, default is 60.00
--r    Background color red component, default is 0.00
--g    Background color green component, default is 0.33
--b    Background color blue component, default is 0.67
+### `modp-gl` (OpenGL UI)
 
--h    Show default command line options
-```
+| Option | Default | Description |
+|---|---|---|
+| `--path <dir>` | `.` | Initial music directory path |
+| `--font <path>` | *(internal)* | Path to a BDF font file |
+| `--cursor <path>` | *(default)* | Path to a custom cursor image |
+| `--config <path>` | `~/.modp/modp.toml` | Configuration file path |
+| `--createconfig` | — | Create a configuration file at the config path |
+| `--showconfig` | — | Show the current resolved configuration |
+| `--auto_increment <bool>` | `true` | Auto-advance at minimum song length or song end |
+| `--random_auto_increment <bool>` | `false` | Pick a random song on auto-advance |
+| `--song_min_length <n>` | `0` | Minimum song length before auto-advance (0–999 seconds) |
+| `--width <n>` | `800` | Window width (320–1280) |
+| `--height <n>` | `480` | Window height (240–960) |
+| `--framelimit <n>` | `60` | Framerate limit (1–240) |
+| `--bg_red <f>` | `0.00` | Background color red component (0.0–1.0) |
+| `--bg_green <f>` | `0.33` | Background color green component (0.0–1.0) |
+| `--bg_blue <f>` | `0.67` | Background color blue component (0.0–1.0) |
+| `--fontstretch <bool>` | `false` | Pixel-double font vertically |
+| `--font_shake_factor <f>` | `0.0` | Shake on-screen text in tune with music (0–9000) |
+| `--font_zoom_factor <f>` | `0.0` | Zoom on-screen text in tune with music (0–9000) |
+| `--font_rotation_factor <f>` | `0.0` | Rotate on-screen text in tune with music (0–9000) |
+| `--bg_flash_factor <f>` | `0.0` | Flash background in tune with music (0–9000) |
+| `--help` | — | Display help and exit |
+
+### `modp-cli` (ncurses/terminal UI)
+
+| Option | Default | Description |
+|---|---|---|
+| `--path <dir>` | `.` | Initial music directory path |
+| `--config <path>` | `~/.modp/modp.toml` | Configuration file path |
+| `--createconfig` | — | Create a configuration file at the config path |
+| `--showconfig` | — | Show the current resolved configuration |
+| `--auto_increment <bool>` | `true` | Auto-advance at minimum song length or song end |
+| `--random_auto_increment <bool>` | `false` | Pick a random song on auto-advance |
+| `--song_min_length <n>` | `0` | Minimum song length before auto-advance (0–999 seconds) |
+| `--help` | — | Display help and exit |
+
+All `--help` and `--createconfig` flags are recognized by both binaries. Options marked without a default are only valid on the command line and cannot be set in the configuration file.
 
 ## Building
 
