@@ -20,7 +20,6 @@ typedef struct Vis_State Vis_State;
 typedef struct Options {
 	char path[_TINYDIR_PATH_MAX];
 	char fontpath[_TINYDIR_PATH_MAX];
-	char cursorpath[_TINYDIR_PATH_MAX];
 	char cfgpath[_TINYDIR_PATH_MAX];
 	bool font_dbl;
 	size_t wdw_width;
@@ -69,7 +68,6 @@ typedef enum Vis { VIS_FFT = 0, VIS_SCOPE = 1, VIS_NONE = 2 } Vis;
 
 struct GLWindow_State {
 	SDL_Window* sdl_wdw;
-	SDL_Cursor* sdl_cur;
 	Vis vis;
 	Vis_State* v;
 

@@ -15,7 +15,6 @@ Command line options:
 |---|---|---|
 | `--path <dir>` | `.` | Initial music directory path |
 | `--font <path>` | *(internal)* | Path to a BDF font file |
-| `--cursor <path>` | *(default)* | Path to a custom cursor image |
 | `--config <path>` | `~/.modp/modp.toml` | Configuration file path |
 | `--createconfig` | — | Create a configuration file at the config path |
 | `--showconfig` | — | Show the current resolved configuration |

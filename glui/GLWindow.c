@@ -540,7 +540,6 @@ GLWindow_Destroy(GLWindow_State* wdw)
 
 	Vis_Destroy(wdw->v);
 	Font_Destroy(wdw->font);
-	SDL_FreeCursor(wdw->sdl_cur);
 
 	free(wdw);
 
@@ -595,8 +594,6 @@ GLWindow_Init(Options* opt, Player_State* ps)
 	GL_Init(gl_wdw->width,
 	        gl_wdw->height,
 	        gl_wdw->clrcolor[0], gl_wdw->clrcolor[1], gl_wdw->clrcolor[2]);
-
-	SDL_ShowCursor(1);
 
 	gl_wdw->sdl_wdw = sdl_wdw;
 
