@@ -86,6 +86,20 @@ struct GLWindow_State {
 	float font_zoom_factor;
 	float font_rotation_factor;
 	float bg_flash_factor;
+
+	// Mouse/hover state
+	int mouse_x;
+	int mouse_y;
+	int hover_item;    // Browser item index under cursor, -1 if none
+
+	// Computed layout for hit testing
+	int layout_browser_x;
+	int layout_browser_y;
+	int layout_item_height;
+	int layout_browser_height;
+	int layout_status_y;
+	int layout_fkey_x[5];  // F1-F5 x positions in status bar
+	int layout_fkey_w[5];  // F1-F5 widths in status bar
 };
 
 bool            GLWindow_ProcessEvents(GLWindow_State*, bool*);

@@ -335,6 +335,48 @@ GLUI_Draw(GLWindow_State* wdw)
 
 	wdw->max_items = (wdw->height / (wdw->font->font_height * zoom)) - 6;
 
+	// Compute layout for mouse hit testing (stored in OpenGL coords, Y=bottom)
+	wdw->layout_browser_x = x;
+	wdw->layout_browser_y = y;
+	wdw->layout_item_height = wdw->font->font_height * zoom;
+	wdw->layout_browser_height = wdw->max_items * wdw->layout_item_height;
+	wdw->layout_status_y = y - wdw->layout_browser_height;
+
+	// F-key positions in status bar (zoom=3, visible char positions)
+	// Color codes (\XXXXXXXX) are skipped by Font_DrawString, so only visible chars count:
+	//  f1:ainc/1;f2:arnd/1;f3,f4:mlth/g000;f5:vis/f
+	//  0       10      20        31 34
+	// Total: 43 visible chars. F3=decrement (label), F4=increment (value).
+	{
+		int fz3 = wdw->font->font_width * 3;
+		wdw->layout_fkey_x[0] = 0 * fz3;      // "f1:ainc/1;" = 10 chars
+		wdw->layout_fkey_w[0] = 10 * fz3;
+		wdw->layout_fkey_x[1] = 10 * fz3;     // "f2:arnd/1;" = 10 chars
+		wdw->layout_fkey_w[1] = 10 * fz3;
+		wdw->layout_fkey_x[2] = 20 * fz3;     // "f3,f4:mlth/" = 11 chars (decrement)
+		wdw->layout_fkey_w[2] = 11 * fz3;
+		wdw->layout_fkey_x[3] = 31 * fz3;     // "000" value = 3 chars (increment)
+		wdw->layout_fkey_w[3] = 3 * fz3;
+		wdw->layout_fkey_x[4] = 34 * fz3;     // ";f5:vis/f" = 9 chars
+		wdw->layout_fkey_w[4] = 9 * fz3;
+	}
+
+	// Determine hover state (convert SDL mouse Y to OpenGL Y)
+	// Item i is drawn at Y = layout_browser_y - (i+1)*item_height
+	// Its band is [layout_browser_y - (i+1)*item_height, layout_browser_y - i*item_height)
+	// Item 0 is at bottom (closest to layout_browser_y), item max_items-1 at top
+	wdw->hover_item = -1;
+	{
+		int gl_y = wdw->height - wdw->mouse_y;
+		int browser_bottom = wdw->layout_browser_y;
+		int browser_top = wdw->layout_browser_y - wdw->max_items * wdw->layout_item_height;
+		if (gl_y > browser_top && gl_y < browser_bottom) {
+			int idx = (browser_bottom - gl_y - 1) / wdw->layout_item_height;
+			if (idx >= 0 && idx < (int)wdw->max_items)
+				wdw->hover_item = idx;
+		}
+	}
+
 	Vis_Update(wdw);
 	GLUI_DrawVis(wdw);
 
@@ -356,9 +398,13 @@ GLUI_Draw(GLWindow_State* wdw)
 		                                     i + wdw->ps->dir_ofs,
 		                                     &isdir);
 
+		// Hover highlight: white for hovered item, default for others
+		const char* item_color = (i == (size_t)wdw->hover_item) ? "\\ffffffff" : "";
+
 		assert(snprintf(tmp_str,
 		                MODP_STR_LENGTH,
-		                "%s%s",
+		                "%s%s%s",
+		                item_color,
 		                isdir && name ? "\\" : " ", name ? name : "")
 		        < MODP_STR_LENGTH - 1);
 
@@ -518,6 +564,74 @@ GLWindow_ProcessEvents(GLWindow_State* wdw, bool* got_input)
 				*got_input = true;
 				GLWindow_HandleKeyDown(wdw, &event.key.keysym);
 				break;
+			case SDL_MOUSEMOTION:
+				wdw->mouse_x = event.motion.x;
+				wdw->mouse_y = event.motion.y;
+				break;
+			case SDL_MOUSEWHEEL:
+				*got_input = true;
+				{
+					int gl_y = wdw->height - wdw->mouse_y;
+					int browser_top = wdw->layout_browser_y - wdw->max_items * wdw->layout_item_height;
+					// Only scroll when mouse is over the browser area
+					if (event.wheel.y != 0 &&
+					    gl_y > browser_top &&
+					    gl_y < wdw->layout_browser_y) {
+						int scroll = (event.wheel.y > 0) ? -1 : 1;
+						// Clamp multi-line scroll (pixel scrolling from trackpads)
+						if (scroll > 5) scroll = 5;
+						if (scroll < -5) scroll = -5;
+						Player_AlterOffset(wdw->ps, scroll);
+					}
+				}
+				break;
+			case SDL_MOUSEBUTTONDOWN:
+				if (event.button.button == SDL_BUTTON_LEFT) {
+					*got_input = true;
+					int mx = event.button.x;
+					int gl_my = wdw->height - event.button.y; // SDL Y → OpenGL Y
+
+					// Check status bar (F-key toggles) — rect goes UP from layout_status_y
+					int status_h = wdw->font->font_height * 3;
+					if (gl_my >= wdw->layout_status_y && gl_my < wdw->layout_status_y + status_h) {
+						int status_x = wdw->width - (wdw->font->font_width * 3 * 43);
+						int rel_x = mx - status_x;
+						int f;
+						for (f = 0; f < 5; f++) {
+							if (rel_x >= wdw->layout_fkey_x[f] &&
+							    rel_x < wdw->layout_fkey_x[f] + wdw->layout_fkey_w[f])
+								break;
+						}
+						if (f < 5) {
+							SDL_Keysym ks;
+							ks.sym = SDLK_F1 + f;
+							GLWindow_HandleKeyDown(wdw, &ks);
+							break;
+						}
+					}
+
+					// Check browser items
+					// Item i band: [layout_browser_y - (i+1)*item_height, layout_browser_y - i*item_height)
+					// Item 0 at bottom, item max_items-1 at top
+					{
+						int browser_bottom = wdw->layout_browser_y;
+						int browser_top = wdw->layout_browser_y - wdw->max_items * wdw->layout_item_height;
+						if (gl_my > browser_top && gl_my < browser_bottom) {
+							int idx = (browser_bottom - gl_my - 1) / wdw->layout_item_height;
+							if (idx >= 0 && idx < (int)wdw->max_items) {
+								// Navigate to clicked item: idx 0 means stay, idx 1 means +1, etc.
+								Player_AlterOffset(wdw->ps, idx);
+								Player_Perform(wdw->ps);
+							}
+						}
+					}
+				} else if (event.button.button == SDL_BUTTON_RIGHT) {
+					*got_input = true;
+					SDL_Keysym ks;
+					ks.sym = SDLK_BACKSPACE;
+					GLWindow_HandleKeyDown(wdw, &ks);
+				}
+				break;
 			case SDL_QUIT:
 				return false;
 				break;
@@ -557,6 +671,7 @@ GLWindow_Init(Options* opt, Player_State* ps)
 	assert(gl_wdw);
 
 	gl_wdw->ps = ps;
+	gl_wdw->hover_item = -1;
 
 	if (SDL_Init(SDL_INIT_VIDEO) < 0) {
 		SDL_Log("Video initialization failed: %s", SDL_GetError());
