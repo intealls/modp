@@ -336,11 +336,13 @@ GLUI_Draw(GLWindow_State* wdw)
 	wdw->max_items = (wdw->height / (wdw->font->font_height * zoom)) - 6;
 
 	// Compute layout for mouse hit testing (stored in OpenGL coords, Y=bottom)
+	// The draw code does: y = y - max_items*font_height*zoom (zoom=2), then zoom=3
+	// So the status bar bottom is at y - max_items*font_height*2
 	wdw->layout_browser_x = x;
 	wdw->layout_browser_y = y;
 	wdw->layout_item_height = wdw->font->font_height * zoom;
 	wdw->layout_browser_height = wdw->max_items * wdw->layout_item_height;
-	wdw->layout_status_y = y - wdw->layout_browser_height;
+	wdw->layout_status_y = y - wdw->max_items * wdw->font->font_height * 2;
 
 	// F-key positions in status bar (zoom=3, visible char positions)
 	// Color codes (\XXXXXXXX) are skipped by Font_DrawString, so only visible chars count:
@@ -590,10 +592,13 @@ GLWindow_ProcessEvents(GLWindow_State* wdw, bool* got_input)
 					*got_input = true;
 					int mx = event.button.x;
 					int gl_my = wdw->height - event.button.y; // SDL Y → OpenGL Y
-
-					// Check status bar (F-key toggles) — rect goes UP from layout_status_y
 					int status_h = wdw->font->font_height * 3;
-					if (gl_my >= wdw->layout_status_y && gl_my < wdw->layout_status_y + status_h) {
+
+					// Check status bar (F-key toggles)
+					// Font_DrawString draws text at y - font_height*zoom, so the text
+					// occupies [layout_status_y - status_h, layout_status_y), NOT
+					// [layout_status_y, layout_status_y + status_h)
+					if (gl_my >= wdw->layout_status_y - status_h && gl_my < wdw->layout_status_y) {
 						int status_x = wdw->width - (wdw->font->font_width * 3 * 43);
 						int rel_x = mx - status_x;
 						int f;
