@@ -553,7 +553,6 @@ GLWindow_Init(Options* opt, Player_State* ps)
 	SDL_Window* sdl_wdw;
 	GLWindow_State* gl_wdw;
 	Vis_State* v;
-	SDL_Cursor* sdl_cur;
 
 	gl_wdw = (GLWindow_State*) calloc(1, sizeof(GLWindow_State));
 	assert(gl_wdw);

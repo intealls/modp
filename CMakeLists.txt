@@ -43,6 +43,9 @@ else()
 endif()
 
 # --- Debug / release flags ---
+set(DEBUG_FLAGS "")
+set(RELEASE_FLAGS "")
+
 if(BUILD_DEBUG)
     set(CMAKE_BUILD_TYPE Debug CACHE STRING "Build type" FORCE)
     if(CMAKE_C_COMPILER_ID STREQUAL "GNU" OR CMAKE_C_COMPILER_ID STREQUAL "Clang")
@@ -134,6 +137,12 @@ set(MODP_CORE_SOURCES
 )
 
 add_library(modp_core STATIC ${MODP_CORE_SOURCES})
+
+# Suppress warnings for third-party source files
+set_source_files_properties(3rdparty/hvl/hvl_replay.c
+    PROPERTIES COMPILE_FLAGS "-w")
+set_source_files_properties(3rdparty/libsidplayfp/libsidplayfp_wrap.cpp
+    PROPERTIES COMPILE_FLAGS "-w")
 
 target_include_directories(modp_core PRIVATE
     ${CMAKE_SOURCE_DIR}/src

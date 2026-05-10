@@ -314,3 +314,6 @@ OpenMPTRenderer_Create(int fs, int bits, int channels)
 	return arndr;
 }
 #endif
+
+/* Prevent empty translation unit warning under -Wpedantic */
+typedef int _omp_renderer_non_empty;

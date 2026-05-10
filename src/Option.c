@@ -274,31 +274,35 @@ create_config(Option* option, size_t n_opts, const char* path)
 	return 0;
 }
 
+// This is a false positive from -Warray-bounds=2 caused by aggressive inlining
+// where the compiler confuses tmp_uint (size_t, 8 bytes) with tmp_float (float, 4 bytes)
+// across different switch cases after inlining set_dest_from_value into set_dest_from_string.
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Warray-bounds"
 static int
 set_dest_from_value(Option* option, void* value)
 {
 	switch (option->type) {
-		size_t tmp_uint;
-		float tmp_float;
-
 		case OPT_STRING:
 			StrCpy((char*) option->dest, _TINYDIR_PATH_MAX, (char*) value);
 			break;
 		case OPT_BOOL:
 			*((bool*) option->dest) = *((bool*) value);
 			break;
-		case OPT_UINT:
-			tmp_uint = *((size_t*) value);
+		case OPT_UINT: {
+			size_t tmp_uint = *((size_t*) value);
 			tmp_uint = tmp_uint > option->max.u ? option->max.u : tmp_uint;
 			tmp_uint = tmp_uint < option->min.u ? option->min.u : tmp_uint;
 			*((size_t*) option->dest) = tmp_uint;
 			break;
-		case OPT_FLOAT:
-			tmp_float = *((float*) value);
+		}
+		case OPT_FLOAT: {
+			float tmp_float = *((float*) value);
 			tmp_float = tmp_float > option->max.f ? option->max.f : tmp_float;
 			tmp_float = tmp_float < option->min.f ? option->min.f : tmp_float;
 			*((float*) option->dest) = tmp_float;
 			break;
+		}
 		default:
 			return 1;
 			break;
@@ -306,6 +310,7 @@ set_dest_from_value(Option* option, void* value)
 
 	return 0;
 }
+#pragma GCC diagnostic pop
 
 static int
 set_dest_from_string(Option* option, char* string)
@@ -381,8 +386,8 @@ config_lookup_set_dest(toml_table_t* config, Option* option)
 		case OPT_UINT:
             d = toml_int_in(config, option->long_name);
             if (d.ok) {
-                if (d.u.i != option->initial.u) {
-                    *((size_t*) option->dest) = d.u.i;
+                if ((size_t)d.u.i != option->initial.u) {
+                    *((size_t*) option->dest) = (size_t)d.u.i;
                 }
             }
 			break;
@@ -405,9 +410,9 @@ static char*
 get_config_from_opts(int argc, char* argv[], Option* option, size_t n_opts)
 {
     //TODO make this function less weird
-	struct option long_options[n_opts + 1];
+	struct option* long_options = calloc(n_opts + 1, sizeof(struct option));
+	if (!long_options) return NULL;
 	Option* option_iter = option;
-	memset(&long_options, 0, sizeof(struct option) * (n_opts + 1));
 
 	for (size_t i = 0; i < n_opts;  i++) {
 		long_options[i].name = option_iter->long_name;
@@ -441,22 +446,24 @@ get_config_from_opts(int argc, char* argv[], Option* option, size_t n_opts)
 		switch (tmp_option->type) {
 			case OPT_STRING:
                 if (strcmp(tmp_option->long_name, "config") == 0) {
+                    free(long_options);
                     return optarg;
                 }
             default:
 				break;
         }
 	}
+	free(long_options);
     return option_iter->initial.str;
 }
 
 int
 Option_Init(int argc, char* argv[], Option* option, size_t n_opts)
 {
-	struct option long_options[n_opts + 1];
+	struct option* long_options = calloc(n_opts + 1, sizeof(struct option));
+	if (!long_options) return 1;
 	Option* option_iter = option;
 	char* config_path = calloc(_TINYDIR_PATH_MAX, sizeof(char));
-	// Option* opt_cfg = malloc(sizeof(Option) * (n_opts + 1));
 	char* cfgpath = get_config_from_opts(argc, argv, option, n_opts);
 	optind = 1;
 	toml_table_t* config = NULL;
@@ -477,14 +484,10 @@ Option_Init(int argc, char* argv[], Option* option, size_t n_opts)
 	    SDL_LogWarn(SDL_LOG_CATEGORY_SYSTEM, "failed to parse %s: %s\n", config_path, strerror(errno));
 	}
 
-	memset(&long_options, 0, sizeof(struct option) * (n_opts + 1));
-
 	for (size_t i = 0; i < n_opts; i++) {
-		// Populate getopt_long structure
 		long_options[i].name = option_iter->long_name;
 		long_options[i].has_arg = option_iter->has_arg;
 
-		// Populate with default value
 		switch (option_iter->type) {
 			case OPT_STRING:
 				set_dest_from_value(option_iter, (void*) option_iter->initial.str);
@@ -533,12 +536,14 @@ Option_Init(int argc, char* argv[], Option* option, size_t n_opts)
 					print_help(option, n_opts);
 					if (config) toml_free(config);
 					free(config_path);
+					free(long_options);
 					exit(0);
 				}
 				if (!strcmp("createconfig", tmp_option->long_name)) {
 					create_config(option, n_opts, (const char*) config_path);
 					if (config) toml_free(config);
 					free(config_path);
+					free(long_options);
 					exit(0);
 				}
 				if (!strcmp("showconfig", tmp_option->long_name)) {
@@ -546,6 +551,7 @@ Option_Init(int argc, char* argv[], Option* option, size_t n_opts)
 						write_opt(&option[i], stdout);
 					if (config) toml_free(config);
 					free(config_path);
+					free(long_options);
 					exit(0);
 				}
 				break;
@@ -554,5 +560,6 @@ Option_Init(int argc, char* argv[], Option* option, size_t n_opts)
 
 	if (config) toml_free(config);
     free(config_path);
+	free(long_options);
 	return 0;
 }

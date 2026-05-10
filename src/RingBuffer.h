@@ -45,7 +45,7 @@ RingBuffer_Create(int size,
 	rb->reserve = reserve;
 	rb->size = size + reserve;
 
-	if (rb->size <= 0 || rb->size > SIZE_MAX / sizeof(T)) {
+	if (rb->size <= 0 || (size_t)rb->size > SIZE_MAX / sizeof(T)) {
 		free(rb);
 		return NULL;
 	}

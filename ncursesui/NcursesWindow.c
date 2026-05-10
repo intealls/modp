@@ -470,7 +470,7 @@ NcursesUI_DrawStatus(NcursesWindow_State* wdw)
 	}
 
 	int y = wdw->height - wdw->status_height;
-	char tmp_str[17];  // " MM:SS/MM:SS\0"
+	char tmp_str[32];  // " MM:SS/MM:SS\0" with room for large values
 
 	// Draw status bar background
 	attron(wdw->color_status);

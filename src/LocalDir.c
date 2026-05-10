@@ -321,7 +321,8 @@ static LocalDir_Entry*
 LocalDir_MakeEntry(const char* path)
 {
 	LocalDir_Entry* e;
-	tinydir_dir dir;
+	tinydir_dir dir = {0};
+	bool dir_opened = false;
 
 	e = (LocalDir_Entry*) calloc(1, sizeof(LocalDir_Entry));
 	if (!e) return NULL;
@@ -339,6 +340,7 @@ LocalDir_MakeEntry(const char* path)
 
 	if (-1 == tinydir_open(&dir, path))
 		goto fail;
+	dir_opened = true;
 
 	while (dir.has_next) {
 		tinydir_file f;
@@ -356,7 +358,7 @@ LocalDir_MakeEntry(const char* path)
 		if (e->n_files + e->n_dirs >= capacity) {
 			capacity *= 2;  // Double the capacity
 			tinydir_file* new_files = (tinydir_file*) realloc(e->files,
-			                                                   capacity * sizeof(tinydir_file));
+		                                                       capacity * sizeof(tinydir_file));
 			if (!new_files) {
 				goto fail;
 			}
@@ -372,7 +374,8 @@ LocalDir_MakeEntry(const char* path)
 			e->n_files++;
 	}
 
-	tinydir_close(&dir);
+	if (dir_opened)
+		tinydir_close(&dir);
 
 	// Shrink to fit
 	tinydir_file* final_files = (tinydir_file*) realloc(e->files,
@@ -393,7 +396,8 @@ LocalDir_MakeEntry(const char* path)
 fail:
 	free(e->files);
 	free(e);
-	tinydir_close(&dir);
+	if (dir_opened)
+		tinydir_close(&dir);
 
 	return NULL;
 }

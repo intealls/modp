@@ -53,17 +53,22 @@ glui: directories $(NAME_GLUI)
 
 ncursesui: directories $(NAME_NCURSES)
 
+# Suppress warnings for third-party code
+WARNINGS_THIRDPARTY = -w
+
 # Build glui executable
 $(NAME_GLUI): src/*.c glui/*.c 3rdparty/hvl/hvl_replay.c deps/tomlc99/toml.c 3rdparty/libsidplayfp/libsidplayfp_wrap.cpp
-	$(CC) $(CFLAGS) $(INCLUDE) -c src/*.c glui/*.c 3rdparty/hvl/hvl_replay.c deps/tomlc99/toml.c
-	$(CXX) $(CXXFLAGS) $(INCLUDE) -c 3rdparty/libsidplayfp/libsidplayfp_wrap.cpp
+	$(CC) $(CFLAGS) $(INCLUDE) -c src/*.c glui/*.c deps/tomlc99/toml.c
+	$(CC) $(CFLAGS) $(INCLUDE) $(WARNINGS_THIRDPARTY) -c 3rdparty/hvl/hvl_replay.c
+	$(CXX) $(CXXFLAGS) $(INCLUDE) $(WARNINGS_THIRDPARTY) -c 3rdparty/libsidplayfp/libsidplayfp_wrap.cpp
 	$(CXX) $(CXXFLAGS) $(INCLUDE) *.o -o $(NAME_GLUI) $(LIBS_COMMON) $(LIBS_GLUI) $(LIBS_PLATFORM_BASE) $(LIBS_PLATFORM_GLUI)
 	rm -f *.o
 
 # Build ncursesui executable
 $(NAME_NCURSES): src/*.c ncursesui/*.c 3rdparty/hvl/hvl_replay.c deps/tomlc99/toml.c 3rdparty/libsidplayfp/libsidplayfp_wrap.cpp
-	$(CC) $(CFLAGS) $(INCLUDE) -c src/*.c ncursesui/*.c 3rdparty/hvl/hvl_replay.c deps/tomlc99/toml.c
-	$(CXX) $(CXXFLAGS) $(INCLUDE) -c 3rdparty/libsidplayfp/libsidplayfp_wrap.cpp
+	$(CC) $(CFLAGS) $(INCLUDE) -c src/*.c ncursesui/*.c deps/tomlc99/toml.c
+	$(CC) $(CFLAGS) $(INCLUDE) $(WARNINGS_THIRDPARTY) -c 3rdparty/hvl/hvl_replay.c
+	$(CXX) $(CXXFLAGS) $(INCLUDE) $(WARNINGS_THIRDPARTY) -c 3rdparty/libsidplayfp/libsidplayfp_wrap.cpp
 	$(CXX) $(CXXFLAGS) $(INCLUDE) *.o -o $(NAME_NCURSES) $(LIBS_COMMON) $(LIBS_NCURSES) $(LIBS_PLATFORM_BASE) $(LIBS_PLATFORM_NCURSES)
 	rm -f *.o
 

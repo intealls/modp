@@ -121,7 +121,7 @@ SIDRenderer_UnLoad(const AudioRenderer* obj)
 static int
 SIDRenderer_Render(const AudioRenderer* obj,
                    void* buf,
-                   const size_t len)
+                   const size_t len SDL_UNUSED)
 {
 	DataObject(rndr_data, obj);
 	int16_t* rndr_buf = (int16_t*) buf;

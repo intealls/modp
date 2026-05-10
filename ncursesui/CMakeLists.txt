@@ -16,7 +16,6 @@ target_include_directories(modp_cli PRIVATE
 
 target_compile_definitions(modp_cli PRIVATE
     ${COMMON_DEFINES}
-    ${CURSES_C_FLAGS}
 )
 
 target_compile_options(modp_cli PRIVATE
