@@ -187,6 +187,7 @@ GLUI_DrawVis(GLWindow_State* wdw)
 
 	if (wdw->vis == VIS_FFT && wdw->ps->am->playing) {
 		scale = wdw->height / log10(1 << 24);
+		float bar_w = (float) wdw->width * 2.f / v->fft_len;
 
 		glBindTexture(GL_TEXTURE_2D, 0);
 		GL_OrthoOn(wdw->width, wdw->height);
@@ -195,19 +196,19 @@ GLUI_DrawVis(GLWindow_State* wdw)
 			for (size_t i = 3; i < v->fft_len / 2 + 2; i += 2) {
 				glColor4ub(0, 0, 0, 255);
 
-				glVertex2f((i - 3) * (wdw->width * 2 / v->fft_len) + 8, (int) (v->spectrum[i - 2] * scale));
-				glVertex2f((i - 1) * (wdw->width * 2 / v->fft_len) + 8, (int) (v->spectrum[i] * scale));
+				glVertex2f((i - 3) * bar_w + 8, (int) (v->spectrum[i - 2] * scale));
+				glVertex2f((i - 1) * bar_w + 8, (int) (v->spectrum[i] * scale));
 
-				glVertex2f((i - 1) * (wdw->width * 2 / v->fft_len) + 8, 0);
-				glVertex2f((i - 3) * (wdw->width * 2 / v->fft_len) + 8, 0);
+				glVertex2f((i - 1) * bar_w + 8, 0);
+				glVertex2f((i - 3) * bar_w + 8, 0);
 
-				glColor4ub(255, (int) ((float) i * 255.f / (float) wdw->v->fft_len), 0, 255);
+				glColor4ub(255, (int) ((float) i * 255.f / (float) v->fft_len), 0, 255);
 
-				glVertex2f((i - 3) * (wdw->width * 2 / v->fft_len), (int) (v->spectrum[i - 2] * scale));
-				glVertex2f((i - 1) * (wdw->width * 2 / v->fft_len), (int) (v->spectrum[i] * scale));
+				glVertex2f((i - 3) * bar_w, (int) (v->spectrum[i - 2] * scale));
+				glVertex2f((i - 1) * bar_w, (int) (v->spectrum[i] * scale));
 
-				glVertex2f((i - 1) * (wdw->width * 2 / v->fft_len), 0);
-				glVertex2f((i - 3) * (wdw->width * 2 / v->fft_len), 0);
+				glVertex2f((i - 1) * bar_w, 0);
+				glVertex2f((i - 3) * bar_w, 0);
 			}
 		}
 		glEnd();
@@ -462,6 +463,8 @@ GLUI_Draw(GLWindow_State* wdw)
 static void
 GLWindow_Resize(GLWindow_State* wdw, int w, int h)
 {
+	wdw->width = w;
+	wdw->height = h;
 	glViewport(0, 0, w, h);
 	SDL_SetWindowSize(wdw->sdl_wdw, w, h);
 }
