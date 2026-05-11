@@ -66,9 +66,15 @@ struct Vis_State {
 	/* Reactive background: bass→R, mids→G, treble→B,
 	   smoothly lerped each frame toward spectral targets. */
 	float reactive_color[3];
+
+	/* FFT waterfall (spectrogram) visualization */
+	unsigned char* wf_buf;      // pixel data: wf_width * wf_height * 3 (RGB)
+	size_t         wf_width;    // horizontal resolution (FFT bins)
+	size_t         wf_height;   // vertical scroll depth (rows)
+	GLuint         wf_tex;      // OpenGL 2D texture handle
 };
 
-typedef enum Vis { VIS_FFT = 0, VIS_SCOPE = 1, VIS_NONE = 2 } Vis;
+typedef enum Vis { VIS_FFT = 0, VIS_SCOPE = 1, VIS_WATERFALL = 2, VIS_NONE = 3 } Vis;
 
 struct GLWindow_State {
 	SDL_Window* sdl_wdw;

@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
+#include <string.h>
 #include <math.h>
 
 #include <SDL2/SDL.h>
@@ -79,6 +80,23 @@ Vis_Init(size_t wdw_width, size_t wdw_height, size_t nsamples, size_t nstars)
 		v->stars[i].visible = false;
 	}
 
+	// Waterfall (spectrogram) buffer + OpenGL texture
+	v->wf_height = wdw_height;
+	v->wf_width  = wdw_width / 2;  // only positive half of FFT matters
+	v->wf_buf = (unsigned char*) calloc(v->wf_width * v->wf_height * 3, 1);
+	assert(v->wf_buf);
+
+	glGenTextures(1, &v->wf_tex);
+	glBindTexture(GL_TEXTURE_2D, v->wf_tex);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB,
+	            (GLsizei)v->wf_width, (GLsizei)v->wf_height,
+	            0, GL_RGB, GL_UNSIGNED_BYTE, NULL);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP);
+	glBindTexture(GL_TEXTURE_2D, 0);
+
 	return v;
 }
 
@@ -137,6 +155,59 @@ Vis_Update(GLWindow_State* wdw)
 				v->reactive_color[2] = treble / max_e;
 			}
 		}
+
+		// Scroll waterfall up N rows per frame (newest data at bottom).
+		{
+			const size_t wf_scroll_speed = 1;
+			size_t row_stride = v->wf_width * 3;
+			size_t scroll_rows = wf_scroll_speed < v->wf_height ? wf_scroll_speed : v->wf_height - 1;
+			size_t scroll_bytes = row_stride * (v->wf_height - scroll_rows);
+
+			// Shift all existing rows up by scroll_rows
+			memmove(v->wf_buf, v->wf_buf + scroll_rows * row_stride, scroll_bytes);
+
+			// Find max spectrum value for normalization (use positive half)
+			float max_spec = 0;
+			for (size_t i = 0; i < v->wf_width && i < v->fft_len / 2; i++)
+				if (v->spectrum[i] > max_spec)
+					max_spec = v->spectrum[i];
+
+			// Encode each new row at the bottom with slight fade upward.
+			for (size_t r = 0; r < scroll_rows; r++) {
+				size_t row_idx = v->wf_height - scroll_rows + r;
+				unsigned char* row = v->wf_buf + row_idx * row_stride;
+				float fade = 1.f - (float) (scroll_rows - 1 - r) / (float) scroll_rows;  // brightest at bottom
+
+				for (size_t i = 0; i < v->wf_width && i < v->fft_len / 2; i++) {
+					float t = max_spec > 0 ? v->spectrum[i] / max_spec : 0.f;
+					t *= fade;
+					if (t < 0.f) t = 0.f;
+					if (t > 1.f) t = 1.f;
+
+					// Hot-iron colormap: black → red → yellow → white
+					if (t < 0.333f) {
+						*row++ = (unsigned char)(t * 3.f * 255.f); // R ramps up
+						*row++ = 0;                                // G off
+						*row++ = 0;                                // B off
+					} else if (t < 0.666f) {
+						*row++ = 255;                              // R full
+						*row++ = (unsigned char)((t - 0.333f) * 3.f * 255.f); // G ramps
+						*row++ = 0;                                // B off
+					} else {
+						*row++ = 255;                              // R full
+						*row++ = 255;                              // G full
+						*row++ = (unsigned char)((t - 0.666f) * 3.f * 255.f); // B ramps
+					}
+				}
+			}
+
+			// Upload updated texture to GPU
+			glBindTexture(GL_TEXTURE_2D, v->wf_tex);
+			glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0,
+			                (GLsizei)v->wf_width, (GLsizei)v->wf_height,
+			                GL_RGB, GL_UNSIGNED_BYTE, v->wf_buf);
+			glBindTexture(GL_TEXTURE_2D, 0);
+		}
 	} else {
 		/* Decay reactive color to zero when not playing. */
 		for (int c = 0; c < 3; c++)
@@ -157,6 +228,8 @@ Vis_Destroy(Vis_State* v)
 	free(v->window);
 	free(v->result);
 	free(v->stars);
+	free(v->wf_buf);
+	glDeleteTextures(1, &v->wf_tex);
 	free(v);
 }
 
@@ -305,6 +378,28 @@ GLUI_DrawVis(GLWindow_State* wdw)
 			}
 		}
 		glEnd();
+		GL_OrthoOff();
+	}
+
+	// Waterfall (spectrogram) mode
+	if (wdw->vis == VIS_WATERFALL) {
+		GL_OrthoOn(wdw->width, wdw->height);
+		glEnable(GL_TEXTURE_2D);
+		glBindTexture(GL_TEXTURE_2D, v->wf_tex);
+		glColor4ub(255, 255, 255, 255);
+		glBegin(GL_QUADS);
+		{
+			glTexCoord2f(0.f, 0.975f);
+			glVertex2f(0, wdw->height);
+			glTexCoord2f(1.f, 0.975f);
+			glVertex2f(wdw->width, wdw->height);
+			glTexCoord2f(1.f, 1.f);
+			glVertex2f(wdw->width, 0);
+			glTexCoord2f(0.f, 1.f);
+			glVertex2f(0, 0);
+		}
+		glEnd();
+		glBindTexture(GL_TEXTURE_2D, 0);
 		GL_OrthoOff();
 	}
 
@@ -472,7 +567,8 @@ GLUI_Draw(GLWindow_State* wdw)
 	                (wdw->ps->auto_inc ? "\\00dd00ff1" : "\\dd0000ff0"),
 	                (wdw->ps->auto_rnd ? "\\00dd00ff1" : "\\dd0000ff0"),
 	                (wdw->ps->auto_inc ? "\\00ff00ff" : "\\ff0000ff"), wdw->ps->min_length,
-	                wdw->vis == VIS_FFT ? "\\dddd00fff" : "\\dddd00ffo")
+	                wdw->vis == VIS_FFT ? "\\dddd00fff" :
+	                (wdw->vis == VIS_SCOPE ? "\\dddd00ffo" : "\\dddd00ffw"))
 	        < MODP_STR_LENGTH - 1);
 
 	x = wdw->width - (wdw->font->font_width * zoom * 43);
