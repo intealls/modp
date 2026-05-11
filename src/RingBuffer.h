@@ -5,16 +5,20 @@
 #define SRC_RINGBUFFER_H_
 
 #include <stddef.h>
+#include <stdint.h>
 #include <stdatomic.h>
 #include <string.h>
 #include <stdlib.h>
 #include <assert.h>
-#include <SDL2/SDL_mutex.h>
 
 #include "Globals.h"
 #include "MinMax.h"
 
 typedef short T;
+
+/* SPSC ring buffer — lock-free, only the producer or consumer
+   calls Write/Read from a single thread each. Synchronisation
+   is provided by acquire/release on the position atomics. */
 
 typedef struct RingBuffer {
 	T* buffer;
@@ -24,7 +28,6 @@ typedef struct RingBuffer {
 
 	_Atomic int playpos;
 	_Atomic int writepos;
-	SDL_mutex* mutex;
 } RingBuffer;
 
 static RingBuffer* RingBuffer_Create        (int, int);
@@ -56,13 +59,6 @@ RingBuffer_Create(int size,
 		return NULL;
 	}
 
-	rb->mutex = SDL_CreateMutex();
-	if (!rb->mutex) {
-		free(rb->buffer);
-		free(rb);
-		return NULL;
-	}
-
 	return rb;
 }
 
@@ -82,7 +78,6 @@ RingBuffer_Destroy(RingBuffer* rb)
 	assert(rb);
 	assert(rb->buffer);
 
-	SDL_DestroyMutex(rb->mutex);
 	free(rb->buffer);
 	free(rb);
 }
@@ -101,8 +96,6 @@ RingBuffer_Write(RingBuffer* rb,
                  const T* src,
                  int n)
 {
-	SDL_LockMutex(rb->mutex);
-
 	int count = RingBuffer_Count(rb);
 	int available_space = rb->size - rb->reserve - count;
 	if (available_space < 0) {
@@ -133,8 +126,6 @@ RingBuffer_Write(RingBuffer* rb,
 		atomic_store_explicit(&rb->writepos, (writepos + n) % rb->size, memory_order_release);
 	}
 
-	SDL_UnlockMutex(rb->mutex);
-
 	return n;
 }
 
@@ -143,8 +134,6 @@ RingBuffer_Read(RingBuffer* rb,
                 T* dst,
                 int n)
 {
-	SDL_LockMutex(rb->mutex);
-
 	int count = RingBuffer_Count(rb);
 	n = min_int(n, count);
 	if (n < 0) n = 0;
@@ -169,8 +158,6 @@ RingBuffer_Read(RingBuffer* rb,
 
 		atomic_store_explicit(&rb->playpos, (playpos + n) % rb->size, memory_order_release);
 	}
-
-	SDL_UnlockMutex(rb->mutex);
 
 	return n;
 }
