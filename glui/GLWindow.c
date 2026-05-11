@@ -134,7 +134,7 @@ Vis_Update(GLWindow_State* wdw)
 			if (max_e > 0) {
 				float target[3] = { bass / max_e, mids / max_e, treble / max_e };
 				for (int c = 0; c < 3; c++)
-					v->reactive_color[c] += (target[c] - v->reactive_color[c]) * 0.02f;
+					v->reactive_color[c] += (target[c] - v->reactive_color[c]) * 0.05f;
 			}
 		}
 	} else {
@@ -421,9 +421,9 @@ GLUI_Draw(GLWindow_State* wdw)
 	boost *= boost;
 
 	/* Blend base color with reactive spectral color, then add flash. */
-	float r = wdw->clrcolor[0] + wdw->v->reactive_color[0] * 0.35f + boost;
-	float g = wdw->clrcolor[1] + wdw->v->reactive_color[1] * 0.35f + boost;
-	float b = wdw->clrcolor[2] + wdw->v->reactive_color[2] * 0.35f + boost;
+	float r = wdw->clrcolor[0] + wdw->v->reactive_color[0] * 0.7f + boost;
+	float g = wdw->clrcolor[1] + wdw->v->reactive_color[1] * 0.7f + boost;
+	float b = wdw->clrcolor[2] + wdw->v->reactive_color[2] * 0.7f + boost;
 	glClearColor(r, g, b, 0.f);
 
 	glColor4ub(GRAY(48, 64));
