@@ -62,6 +62,10 @@ struct Vis_State {
 	float* window;
 	float mean_energy_band_div16;
 	fftwf_complex* result;
+
+	/* Reactive background: bass→R, mids→G, treble→B,
+	   smoothly lerped each frame toward spectral targets. */
+	float reactive_color[3];
 };
 
 typedef enum Vis { VIS_FFT = 0, VIS_SCOPE = 1, VIS_NONE = 2 } Vis;

@@ -107,6 +107,40 @@ Vis_Update(GLWindow_State* wdw)
 		}
 
 		v->mean_energy_band_div16 /= v->fft_len / 16;
+
+		/* Reactive background: split spectrum into 3 bands,
+		   normalize to 0–1, lerp toward target each frame. */
+		{
+			float bass = 0, mids = 0, treble = 0;
+			size_t bass_n   = 0, mids_n = 0, treble_n = 0;
+			size_t mid_start   = v->fft_len / 8;
+			size_t treble_start = v->fft_len / 3;
+
+			for (size_t i = 2; i < v->fft_len / 2; i++) {
+				float e = (v->result[i][0] * v->result[i][0] +
+				           v->result[i][1] * v->result[i][1]);
+				if (i < mid_start)   { bass   += e; bass_n++; }
+				else if (i < treble_start) { mids   += e; mids_n++; }
+				else                  { treble += e; treble_n++; }
+			}
+			if (bass_n)   bass /= bass_n;
+			if (mids_n)   mids /= mids_n;
+			if (treble_n) treble /= treble_n;
+
+			/* Normalize each band by the max across all three. */
+			float max_e = bass;
+			if (mids > max_e)   max_e = mids;
+			if (treble > max_e) max_e = treble;
+			if (max_e > 0) {
+				float target[3] = { bass / max_e, mids / max_e, treble / max_e };
+				for (int c = 0; c < 3; c++)
+					v->reactive_color[c] += (target[c] - v->reactive_color[c]) * 0.02f;
+			}
+		}
+	} else {
+		/* Decay reactive color to zero when not playing. */
+		for (int c = 0; c < 3; c++)
+			v->reactive_color[c] *= 0.95f;
 	}
 }
 
@@ -386,7 +420,11 @@ GLUI_Draw(GLWindow_State* wdw)
 	float boost = wdw->v->mean_energy_band_div16 / (65536.f * 8.f) * wdw->bg_flash_factor;
 	boost *= boost;
 
-	glClearColor(wdw->clrcolor[0] + boost, wdw->clrcolor[1] + boost, wdw->clrcolor[2] + boost, 0.f);
+	/* Blend base color with reactive spectral color, then add flash. */
+	float r = wdw->clrcolor[0] + wdw->v->reactive_color[0] * 0.35f + boost;
+	float g = wdw->clrcolor[1] + wdw->v->reactive_color[1] * 0.35f + boost;
+	float b = wdw->clrcolor[2] + wdw->v->reactive_color[2] * 0.35f + boost;
+	glClearColor(r, g, b, 0.f);
 
 	glColor4ub(GRAY(48, 64));
 	GL_DrawRec(0, y, wdw->width, wdw->font->font_height * zoom * wdw->max_items, true, wdw->width, wdw->height);
