@@ -83,14 +83,14 @@ Vis_Init(size_t wdw_width, size_t wdw_height, size_t nsamples, size_t nstars)
 	// Waterfall (spectrogram) buffer + OpenGL texture
 	v->wf_height = wdw_height;
 	v->wf_width  = wdw_width / 2;  // only positive half of FFT matters
-	v->wf_buf = (unsigned char*) calloc(v->wf_width * v->wf_height * 3, 1);
+	v->wf_buf = (unsigned char*) calloc(v->wf_width * v->wf_height * 4, 1);
 	assert(v->wf_buf);
 
 	glGenTextures(1, &v->wf_tex);
 	glBindTexture(GL_TEXTURE_2D, v->wf_tex);
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB,
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA,
 	            (GLsizei)v->wf_width, (GLsizei)v->wf_height,
-	            0, GL_RGB, GL_UNSIGNED_BYTE, NULL);
+	            0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP);
@@ -156,15 +156,15 @@ Vis_Update(GLWindow_State* wdw)
 			}
 		}
 
-		// Scroll waterfall up N rows per frame (newest data at bottom).
+		// Scroll waterfall down N rows per frame (newest data at top).
 		{
 			const size_t wf_scroll_speed = 1;
-			size_t row_stride = v->wf_width * 3;
+			size_t row_stride = v->wf_width * 4;  // RGBA
 			size_t scroll_rows = wf_scroll_speed < v->wf_height ? wf_scroll_speed : v->wf_height - 1;
 			size_t scroll_bytes = row_stride * (v->wf_height - scroll_rows);
 
-			// Shift all existing rows up by scroll_rows
-			memmove(v->wf_buf, v->wf_buf + scroll_rows * row_stride, scroll_bytes);
+			// Shift all existing rows down by scroll_rows (push toward bottom)
+			memmove(v->wf_buf + scroll_rows * row_stride, v->wf_buf, scroll_bytes);
 
 			// Find max spectrum value for normalization (use positive half)
 			float max_spec = 0;
@@ -172,11 +172,11 @@ Vis_Update(GLWindow_State* wdw)
 				if (v->spectrum[i] > max_spec)
 					max_spec = v->spectrum[i];
 
-			// Encode each new row at the bottom with slight fade upward.
+			// Encode each new row at the top with slight fade downward.
 			for (size_t r = 0; r < scroll_rows; r++) {
-				size_t row_idx = v->wf_height - scroll_rows + r;
+				size_t row_idx = r;
 				unsigned char* row = v->wf_buf + row_idx * row_stride;
-				float fade = 1.f - (float) (scroll_rows - 1 - r) / (float) scroll_rows;  // brightest at bottom
+				float fade = 1.f - (float) r / (float) scroll_rows;  // brightest at top
 
 				for (size_t i = 0; i < v->wf_width && i < v->fft_len / 2; i++) {
 					float t = max_spec > 0 ? v->spectrum[i] / max_spec : 0.f;
@@ -184,19 +184,23 @@ Vis_Update(GLWindow_State* wdw)
 					if (t < 0.f) t = 0.f;
 					if (t > 1.f) t = 1.f;
 
-					// Hot-iron colormap: black → red → yellow → white
+					// Hot-iron colormap with alpha: low intensity → transparent
+					unsigned char a = (unsigned char)(t * 255.f);  // alpha tracks intensity
 					if (t < 0.333f) {
 						*row++ = (unsigned char)(t * 3.f * 255.f); // R ramps up
 						*row++ = 0;                                // G off
 						*row++ = 0;                                // B off
+						*row++ = a;                                // A
 					} else if (t < 0.666f) {
 						*row++ = 255;                              // R full
 						*row++ = (unsigned char)((t - 0.333f) * 3.f * 255.f); // G ramps
 						*row++ = 0;                                // B off
+						*row++ = a;                                // A
 					} else {
 						*row++ = 255;                              // R full
 						*row++ = 255;                              // G full
 						*row++ = (unsigned char)((t - 0.666f) * 3.f * 255.f); // B ramps
+						*row++ = a;                                // A
 					}
 				}
 			}
@@ -205,7 +209,7 @@ Vis_Update(GLWindow_State* wdw)
 			glBindTexture(GL_TEXTURE_2D, v->wf_tex);
 			glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0,
 			                (GLsizei)v->wf_width, (GLsizei)v->wf_height,
-			                GL_RGB, GL_UNSIGNED_BYTE, v->wf_buf);
+			                GL_RGBA, GL_UNSIGNED_BYTE, v->wf_buf);
 			glBindTexture(GL_TEXTURE_2D, 0);
 		}
 	} else {
@@ -381,22 +385,27 @@ GLUI_DrawVis(GLWindow_State* wdw)
 		GL_OrthoOff();
 	}
 
-	// Waterfall (spectrogram) mode
+	// Waterfall (spectrogram) mode — covers status bar, browser, and song info
 	if (wdw->vis == VIS_WATERFALL) {
 		GL_OrthoOn(wdw->width, wdw->height);
 		glEnable(GL_TEXTURE_2D);
 		glBindTexture(GL_TEXTURE_2D, v->wf_tex);
 		glColor4ub(255, 255, 255, 255);
+
+		int status_h = wdw->font->font_height * 3;
+		// Waterfall spans from status bar bottom to song info top
+		int wf_y0 = wdw->layout_browser_y - wdw->layout_browser_height - status_h;
+		int wf_y1 = wdw->layout_browser_y + wdw->font->font_height * 3;
 		glBegin(GL_QUADS);
 		{
-			glTexCoord2f(0.f, 0.975f);
-			glVertex2f(0, wdw->height);
-			glTexCoord2f(1.f, 0.975f);
-			glVertex2f(wdw->width, wdw->height);
-			glTexCoord2f(1.f, 1.f);
-			glVertex2f(wdw->width, 0);
-			glTexCoord2f(0.f, 1.f);
-			glVertex2f(0, 0);
+			glTexCoord2f(0.f, 0.025f);
+			glVertex2f(0, wf_y1);
+			glTexCoord2f(1.f, 0.025f);
+			glVertex2f(wdw->width, wf_y1);
+			glTexCoord2f(1.f, 0.001f);
+			glVertex2f(wdw->width, wf_y0);
+			glTexCoord2f(0.f, 0.001f);
+			glVertex2f(0, wf_y0);
 		}
 		glEnd();
 		glBindTexture(GL_TEXTURE_2D, 0);
