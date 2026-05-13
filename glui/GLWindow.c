@@ -399,20 +399,65 @@ GLUI_DrawVis(GLWindow_State* wdw)
 		// Waterfall spans from status bar bottom to song info top
 		int wf_y0 = wdw->layout_browser_y - wdw->layout_browser_height - status_h;
 		int wf_y1 = wdw->layout_browser_y + wdw->font->font_height * 3;
+		int wf_w = wf_y1 - wf_y0;
+
+		// Pixel-grid rendering: split waterfall into independently perturbed blocks
+		// More blocks + higher perturb = heavier pixel chaos
+		const int cols = 32;  // horizontal grid resolution
+		const int rows = 16;  // vertical grid resolution
+		int cell_w = wdw->width / cols;
+		int cell_h = wf_w / rows;
+
 		glBegin(GL_QUADS);
 		{
-			float rnd_x0 = fabsf(((((float)rand() / RAND_MAX) - 0.5) * jit_factor) * perturb);
-			float rnd_x1 = rnd_x0;//fabsf(((((float)rand() / RAND_MAX) - 0.5) * jit_factor) * perturb);
-			float rnd_y0 = rnd_x0;//fabsf(((((float)rand() / RAND_MAX) - 0.5) * jit_factor) * perturb);
-			float rnd_y1 = rnd_x0;//fabsf(((((float)rand() / RAND_MAX) - 0.5) * jit_factor) * perturb);
-			glTexCoord2f(0.f, 0.025f - rnd_y0);
-			glVertex2f(0, wf_y1);
-			glTexCoord2f(1.f, 0.025f - rnd_y0);
-			glVertex2f(wdw->width, wf_y1);
-			glTexCoord2f(1.f - rnd_x1, 0.001f);
-			glVertex2f(wdw->width, wf_y0);
-			glTexCoord2f(0.f, 0.001f);
-			glVertex2f(0, wf_y0);
+			for (int r = 0; r < rows; r++) {
+				for (int c = 0; c < cols; c++) {
+					// Normalized position within waterfall area
+					float nx = (float) c / cols;
+					float ny = (float) r / rows;
+
+					// Sample local FFT energy for per-column reactivity
+					size_t spec_idx = (size_t)(nx * (v->wf_width - 1));
+					float spec_norm = v->wf_width > 0 ? v->spectrum[spec_idx] / 65536.f : 0.f;
+
+					// Combine global energy with local spectral energy
+					float energy = (jit_factor + spec_norm) * 0.5f;
+
+					// Per-cell random perturbation scaled by energy and factor
+					float dx = ((((float)rand() / RAND_MAX) - 0.5) * 2.f * energy) * perturb;
+					float dy = ((((float)rand() / RAND_MAX) - 0.5) * 2.f * energy) * perturb;
+					float ds = ((((float)rand() / RAND_MAX)) * energy) * perturb * 0.01f;
+
+					// Cell screen coordinates with jitter
+					int cx0 = c * cell_w + (int)dx;
+					int cy0 = wf_y0 + r * cell_h + (int)dy;
+					int cx1 = (c + 1) * cell_w + (int)dx;
+					int cy1 = wf_y0 + (r + 1) * cell_h + (int)dy;
+
+					// Texture coordinates with jitter
+					float tx0 = nx;
+					float ty0 = 0.025f - ny * 0.024f;  // map to top strip of texture
+					float tx1 = (float)(c + 1) / cols;
+					float ty1 = 0.025f - (float)(r + 1) / rows * 0.024f;
+
+					// Perturb texture coords — creates chromatic scrambling at high energies
+					float dtx = dx / (float)wdw->width * 0.1f;
+					float dty = dy / (float)wf_w * 0.01f;
+
+					// Scale offset from center for zoom-pulse effect
+					float sc_x = (cx0 + cx1) * 0.5f * ds;
+					float sc_y = (cy0 + cy1) * 0.5f * ds;
+
+					glTexCoord2f(tx0 + dtx, ty0 + dty);
+					glVertex2f(cx0 + sc_x, cy0 + sc_y);
+					glTexCoord2f(tx1 + dtx, ty0 + dty);
+					glVertex2f(cx1 + sc_x, cy0 + sc_y);
+					glTexCoord2f(tx1 + dtx, ty1 + dty);
+					glVertex2f(cx1 + sc_x, cy1 + sc_y);
+					glTexCoord2f(tx0 + dtx, ty1 + dty);
+					glVertex2f(cx0 + sc_x, cy1 + sc_y);
+				}
+			}
 		}
 		glEnd();
 		glBindTexture(GL_TEXTURE_2D, 0);
