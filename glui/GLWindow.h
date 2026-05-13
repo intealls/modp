@@ -31,11 +31,12 @@ typedef struct Options {
 	float clr_r;
 	float clr_g;
 	float clr_b;
-	float font_shake_factor;
-	float font_zoom_factor;
-	float font_rotation_factor;
-	float bg_flash_factor;
-} Options;
+	 float font_shake_factor;
+		float font_zoom_factor;
+		float font_rotation_factor;
+		float bg_flash_factor;
+		float perturb_waterfall_factor;
+	} Options;
 
 typedef struct Star {
 	int speed_x, speed_y,
@@ -96,6 +97,7 @@ struct GLWindow_State {
 	float font_zoom_factor;
 	float font_rotation_factor;
 	float bg_flash_factor;
+	float perturb_waterfall_factor;
 
 	// Mouse/hover state
 	int mouse_x;

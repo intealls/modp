@@ -184,13 +184,22 @@ main(int argc, char* argv[])
 	                   .initial.f = 0.f,
 	                   .min.f = 0.f,
 	                   .max.f = 9000.f,
-	                   .dest = &o.bg_flash_factor },
-	                 { .long_name = "help",
-	                   .description = "Display help",
-	                   .type = OPT_NULL,
-	                   .has_arg = false,
-	                   .in_cfg_file = false,
-	                   .dest = NULL } };
+	       .dest = &o.bg_flash_factor },
+	       { .long_name = "perturb_waterfall_factor",
+	       .description = "Perturb waterfall texture in tune with music",
+	       .type = OPT_FLOAT,
+	       .has_arg = true,
+	       .in_cfg_file = true,
+	       .initial.f = 0.f,
+	       .min.f = 0.f,
+	       .max.f = 9000.f,
+	       .dest = &o.perturb_waterfall_factor },
+	       { .long_name = "help",
+	       .description = "Display help",
+	       .type = OPT_NULL,
+	       .has_arg = false,
+	       .in_cfg_file = false,
+	       .dest = NULL } };
 
 	Option_Init(argc, argv, opt, sizeof(opt) / sizeof(Option));
 

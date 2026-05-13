@@ -392,17 +392,24 @@ GLUI_DrawVis(GLWindow_State* wdw)
 		glBindTexture(GL_TEXTURE_2D, v->wf_tex);
 		glColor4ub(255, 255, 255, 255);
 
+		float jit_factor = v->mean_energy_band_div16 / 65536.f;
+		float perturb = wdw->perturb_waterfall_factor;
+
 		int status_h = wdw->font->font_height * 3;
 		// Waterfall spans from status bar bottom to song info top
 		int wf_y0 = wdw->layout_browser_y - wdw->layout_browser_height - status_h;
 		int wf_y1 = wdw->layout_browser_y + wdw->font->font_height * 3;
 		glBegin(GL_QUADS);
 		{
-			glTexCoord2f(0.f, 0.025f);
+			float rnd_x0 = fabsf(((((float)rand() / RAND_MAX) - 0.5) * jit_factor) * perturb);
+			float rnd_x1 = rnd_x0;//fabsf(((((float)rand() / RAND_MAX) - 0.5) * jit_factor) * perturb);
+			float rnd_y0 = rnd_x0;//fabsf(((((float)rand() / RAND_MAX) - 0.5) * jit_factor) * perturb);
+			float rnd_y1 = rnd_x0;//fabsf(((((float)rand() / RAND_MAX) - 0.5) * jit_factor) * perturb);
+			glTexCoord2f(0.f, 0.025f - rnd_y0);
 			glVertex2f(0, wf_y1);
-			glTexCoord2f(1.f, 0.025f);
+			glTexCoord2f(1.f, 0.025f - rnd_y0);
 			glVertex2f(wdw->width, wf_y1);
-			glTexCoord2f(1.f, 0.001f);
+			glTexCoord2f(1.f - rnd_x1, 0.001f);
 			glVertex2f(wdw->width, wf_y0);
 			glTexCoord2f(0.f, 0.001f);
 			glVertex2f(0, wf_y0);
@@ -837,6 +844,7 @@ GLWindow_Init(Options* opt, Player_State* ps)
 	gl_wdw->font_zoom_factor = opt->font_zoom_factor;
 	gl_wdw->font_rotation_factor = opt->font_rotation_factor;
 	gl_wdw->bg_flash_factor = opt->bg_flash_factor;
+	gl_wdw->perturb_waterfall_factor = opt->perturb_waterfall_factor;
 
 	gl_wdw->clrcolor[0] = opt->clr_r;
 	gl_wdw->clrcolor[1] = opt->clr_g;
