@@ -77,6 +77,10 @@ struct Vis_State {
 
 typedef enum Vis { VIS_FFT = 0, VIS_SCOPE = 1, VIS_WATERFALL = 2, VIS_NONE = 3 } Vis;
 
+/* ── Options Editor ──────────────────────────────────────────────────── */
+
+typedef struct OptionsEditor OptionsEditor;
+
 struct GLWindow_State {
 	SDL_Window* sdl_wdw;
 	Vis vis;
@@ -92,12 +96,18 @@ struct GLWindow_State {
 
 	Player_State* ps;
 
+	/* Options pointer — editor writes directly into this */
+	Options* opts;
+
 	float clrcolor[3];
 	float font_shake_factor;
 	float font_zoom_factor;
 	float font_rotation_factor;
 	float bg_flash_factor;
 	float perturb_waterfall_factor;
+
+	/* Options editor state */
+	OptionsEditor* editor;
 
 	// Mouse/hover state
 	int mouse_x;
