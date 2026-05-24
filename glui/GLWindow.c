@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
+#include <stddef.h>
 #include <string.h>
 #include <math.h>
 
@@ -30,10 +31,9 @@
 #define SCOPE_STEP             1
 #define SCOPE_OFFSET           3
 
-#define SCOPE_OUTLINE_OFFSET   SCOPE_OFFSET   /* outline pass offset */
-
 #define REACTIVE_DECAY         0.95f
 #define REACTIVE_BLEND         0.25f
+#define PEAK_DECAY             0.999f
 
 #define MAX_ENERGY             (65536.f * 8.f)
 
@@ -67,12 +67,6 @@
 
 /* ── Helpers ─────────────────────────────────────────────────────────── */
 
-#define safe_snprintf(buf, len, ...) \
-    do { \
-        int _snret = snprintf(buf, len, __VA_ARGS__); \
-        if (_snret >= (int)(len) - 1) buf[(len) - 2] = '\0'; \
-    } while (0)
-
 #include "Font.h"
 #include "GL.h"
 #include "GLColors.h"
@@ -86,25 +80,10 @@ static void Vis_Destroy(Vis_State* v);
 
 /* ── Options Editor data structures ──────────────────────────────────── */
 
-typedef enum OptType {
-	OPT_TYPE_BOOL,
-	OPT_TYPE_UINT,
-	OPT_TYPE_FLOAT,
-} OptType;
-
 typedef struct OptionEntry {
 	const char* name;         /* Display name (left-aligned) */
 	const char* description;  /* Short description below name */
-	OptType type;
-	union {
-		size_t su;
-		float sf;
-	} min, max;
-	union {
-		bool* b;
-		size_t* su;
-		float* sf;
-	} val;
+	float min_val, max_val;
 } OptionEntry;
 
 struct OptionsEditor {
@@ -117,38 +96,74 @@ struct OptionsEditor {
 
 static OptionEntry option_list[] = {
 	/* Background color */
-	{ "BG Color R",       "Background red (0.0-1.0)",
-	  OPT_TYPE_FLOAT, .min = { .sf = 0.0f }, .max = { .sf = 255.0f } },
-	{ "BG Color G",       "Background green (0.0-1.0)",
-	  OPT_TYPE_FLOAT, .min = { .sf = 0.0f }, .max = { .sf = 255.0f } },
-	{ "BG Color B",       "Background blue (0.0-1.0)",
-	  OPT_TYPE_FLOAT, .min = { .sf = 0.0f }, .max = { .sf = 255.0f } },
+	{ "BG Color R",       "Background red (0.0-1.0)",  0.0f, 1.0f },
+	{ "BG Color G",       "Background green (0.0-1.0)", 0.0f, 1.0f },
+	{ "BG Color B",       "Background blue (0.0-1.0)",  0.0f, 1.0f },
 
 	/* Font effects */
-	{ "Shake Factor",     "Text shake synced to music",
-	  OPT_TYPE_FLOAT, .min = { .sf = 0.0f }, .max = { .sf = 100.0f } },
-	{ "Zoom Factor",      "Text zoom synced to music",
-	  OPT_TYPE_FLOAT, .min = { .sf = 0.0f }, .max = { .sf = 100.0f } },
+	{ "Shake Factor",     "Text shake synced to music", 0.0f, 100.0f },
+	{ "Zoom Factor",      "Text zoom synced to music",  0.0f, 100.0f },
+	{ "Rotation Factor",  "Text rotation synced to music", 0.0f, 100.0f },
 
 	/* Visualization effects */
-	{ "Perturb Factor",   "Spectrogram perturbation",
-	  OPT_TYPE_FLOAT, .min = { .sf = 0.0f }, .max = { .sf = 100.0f } },
+	{ "Perturb Factor",   "Spectrogram perturbation", 0.0f, 100.0f },
 };
 
-/* ── Sync Options struct from window state fields ────────────────────── */
+#define NUM_OPTIONS (sizeof(option_list) / sizeof(option_list[0]))
+
+/* Edit targets: maps option index → (float* ptr, min, max from option_list) */
+typedef struct EditTarget {
+	float* ptr;
+	float min_val, max_val;
+} EditTarget;
+
+static EditTarget
+get_edit_target(GLWindow_State* wdw, size_t idx)
+{
+	assert(idx < NUM_OPTIONS);
+	EditTarget et;
+	et.min_val = option_list[idx].min_val;
+	et.max_val = option_list[idx].max_val;
+	switch (idx) {
+		case 0: et.ptr = &wdw->clrcolor[0]; break;
+		case 1: et.ptr = &wdw->clrcolor[1]; break;
+		case 2: et.ptr = &wdw->clrcolor[2]; break;
+		case 3: et.ptr = &wdw->font_shake_factor; break;
+		case 4: et.ptr = &wdw->font_zoom_factor; break;
+		case 5: et.ptr = &wdw->font_rotation_factor; break;
+		case 6: et.ptr = &wdw->perturb_waterfall_factor; break;
+		default: assert(0 && "invalid option index"); return (EditTarget){ 0 };
+	}
+	return et;
+}
+
+/* ── Sync window fields → persistent opts (called on close) ──────────── */
 
 static void
-GLWindow_OptionsEditor_SyncToOpts(GLWindow_State* wdw)
+GLWindow_OptionsEditor_Persist(GLWindow_State* wdw)
 {
-	wdw->opts->clr_r = wdw->clrcolor[0];
-	wdw->opts->clr_g = wdw->clrcolor[1];
-	wdw->opts->clr_b = wdw->clrcolor[2];
+	wdw->opts->clr_r             = wdw->clrcolor[0];
+	wdw->opts->clr_g             = wdw->clrcolor[1];
+	wdw->opts->clr_b             = wdw->clrcolor[2];
 	wdw->opts->font_shake_factor = wdw->font_shake_factor;
-	wdw->opts->font_zoom_factor = wdw->font_zoom_factor;
+	wdw->opts->font_zoom_factor  = wdw->font_zoom_factor;
+	wdw->opts->font_rotation_factor = wdw->font_rotation_factor;
 	wdw->opts->perturb_waterfall_factor = wdw->perturb_waterfall_factor;
 }
 
-#define NUM_OPTIONS (sizeof(option_list) / sizeof(option_list[0]))
+/* ── Sync persistent opts → window fields (called on open) ───────────── */
+
+static void
+GLWindow_OptionsEditor_Load(GLWindow_State* wdw)
+{
+	wdw->clrcolor[0]             = wdw->opts->clr_r;
+	wdw->clrcolor[1]             = wdw->opts->clr_g;
+	wdw->clrcolor[2]             = wdw->opts->clr_b;
+	wdw->font_shake_factor       = wdw->opts->font_shake_factor;
+	wdw->font_zoom_factor        = wdw->opts->font_zoom_factor;
+	wdw->font_rotation_factor    = wdw->opts->font_rotation_factor;
+	wdw->perturb_waterfall_factor = wdw->opts->perturb_waterfall_factor;
+}
 
 /* ── Options Editor functions ────────────────────────────────────────── */
 
@@ -189,10 +204,11 @@ GLUI_DrawOptionsEditor(GLWindow_State* wdw)
 
 	int fw = wdw->font->font_width;
 	int fh = wdw->font->font_height;
+	int text_zoom = 2;
 
-	/* Overlay dimensions */
-	int overlay_w = 72 * fw;
-	int overlay_h = 18 * fh;
+	/* Overlay dimensions — fit to actual option count */
+	int overlay_w = 72 * fw * text_zoom;
+	int overlay_h = (NUM_OPTIONS + 3) * fh * text_zoom;  /* title + separator + options + footer */
 	int ox = (int)wdw->width / 2 - overlay_w / 2;
 	int oy = (int)wdw->height / 2 - overlay_h / 2;
 
@@ -200,20 +216,30 @@ GLUI_DrawOptionsEditor(GLWindow_State* wdw)
 	if (overlay_w > (int)wdw->width) { ox = 0; overlay_w = (int)wdw->width; }
 	if (overlay_h > (int)wdw->height) { oy = 0; overlay_h = (int)wdw->height; }
 
-	/* Dark semi-transparent background */
-	glColor4ub(0, 0, 0, 180);
-	GL_DrawRec(ox, oy, overlay_w, overlay_h, true, (int)wdw->width, (int)wdw->height);
+	/* Overlay top in OpenGL coords (y=0 at bottom) */
+	int gl_oy = wdw->height - oy;
 
-	/* Title */
-	Font_DrawString(wdw, "\\00ddffffOptions Editor", ox + fw, oy + fh - fh / 2, 2);
+	/* Dark semi-transparent background — derived from user's BG color */
+	glColor4ub(
+	    (uint8_t)(wdw->clrcolor[0] / 8),
+	    (uint8_t)(wdw->clrcolor[1] / 8),
+	    (uint8_t)(wdw->clrcolor[2] / 8),
+	    220);
+	GL_DrawRec(ox, gl_oy, overlay_w, overlay_h, true, (int)wdw->width, (int)wdw->height);
 
-	/* Separator line */
+	/* Title — at top of overlay */
+	Font_DrawString(wdw, "\\00ddffffOptions Editor",
+	                ox + fw * text_zoom,
+	                gl_oy - fh * text_zoom * 3, 2 * text_zoom);
+
+	/* Separator line — below title */
 	glColor4ub(100, 100, 150, 180);
-	GL_DrawRec(ox, oy + fh * 2 - fh / 2, overlay_w, 1, false, (int)wdw->width, (int)wdw->height);
+	GL_DrawRec(ox, gl_oy - fh * text_zoom * 4 - fh * text_zoom / 2,
+	           overlay_w, 1, false, (int)wdw->width, (int)wdw->height);
 
 	/* Options list (scrollable) */
-	int list_y = oy + fh * 2;
-	size_t visible_rows = (size_t)((overlay_h - fh * 3) / fh);
+	int list_y = gl_oy - fh * text_zoom * 5;
+	size_t visible_rows = (size_t)((wdw->height - fh * text_zoom * 3) / (fh * text_zoom));
 	if (visible_rows < 2)
 		visible_rows = 2;
 	if (visible_rows > NUM_OPTIONS)
@@ -228,49 +254,46 @@ GLUI_DrawOptionsEditor(GLWindow_State* wdw)
 		size_t idx = ed->scroll + i;
 		const OptionEntry* oe = &option_list[idx];
 
-		int y = list_y + (int)(i * fh);
+		int y = list_y - (int)(i * fh * text_zoom);
 		bool is_selected = (idx == ed->selected);
 
 		/* Option name */
 		const char* name_color = is_selected ? "\\00ddffff" : "\\ccccccff";
-		Font_DrawString(wdw, name_color, ox + fw, y, 1);
-		Font_DrawString(wdw, oe->name, ox + fw * 2, y, 1);
+		Font_DrawString(wdw, name_color, ox + fw * text_zoom, y, text_zoom);
+		Font_DrawString(wdw, oe->name, ox + fw * text_zoom * 2, y, text_zoom);
 
 		/* Selection indicator */
 		if (is_selected)
-			Font_DrawString(wdw, "\\ffffff>", ox + fw, y, 1);
+			Font_DrawString(wdw, "\\ffffffff>", ox + fw * text_zoom, y, text_zoom);
 
 		/* Description */
 		if (is_selected) {
-			int desc_y = y + fh;
-			Font_DrawString(wdw, "\\777777ff", ox + fw * 2, desc_y, 1);
-			Font_DrawString(wdw, oe->description, ox + fw * 2 + (int)strlen(oe->name) * fw, desc_y, 1);
+			int desc_y = y - fh * text_zoom;
+			char desc_buf[256];
+			snprintf(desc_buf, sizeof(desc_buf), "\\777777ff%s", oe->description);
+			Font_DrawString(wdw, desc_buf,
+			                ox + fw * text_zoom * 2,
+			                desc_y, text_zoom);
 		}
 
 		/* Current value — read from GLWindow_State for immediate feedback */
 		if (is_selected) {
-			int val_x = ox + fw + 30 * fw;
+			int val_x = ox + fw * text_zoom + 30 * fw * text_zoom;
 			char val_str[64];
+			EditTarget et = get_edit_target(wdw, idx);
+			if (idx < 3)
+				snprintf(val_str, sizeof(val_str), "%.2f", *et.ptr);
+			else
+				snprintf(val_str, sizeof(val_str), "%.1f", *et.ptr);
 
-			switch (idx) {
-				case 0: safe_snprintf(val_str, sizeof(val_str), "%.0f", wdw->clrcolor[0]); break;
-				case 1: safe_snprintf(val_str, sizeof(val_str), "%.0f", wdw->clrcolor[1]); break;
-				case 2: safe_snprintf(val_str, sizeof(val_str), "%.0f", wdw->clrcolor[2]); break;
-				case 3: safe_snprintf(val_str, sizeof(val_str), "%.1f", wdw->font_shake_factor); break;
-				case 4: safe_snprintf(val_str, sizeof(val_str), "%.1f", wdw->font_zoom_factor); break;
-				case 5: safe_snprintf(val_str, sizeof(val_str), "%.1f", wdw->perturb_waterfall_factor); break;
-				default: safe_snprintf(val_str, sizeof(val_str), "?"); break;
-			}
-
-			Font_DrawString(wdw, "\\dddd00ff", val_x, y, 1);
-			Font_DrawString(wdw, val_str, val_x + (int)strlen(val_str) * fw, y, 1);
+			Font_DrawString(wdw, "\\dddd00ff", val_x, y, text_zoom);
+			Font_DrawString(wdw, val_str, val_x + (int)strlen(val_str) * fw * text_zoom, y, text_zoom);
 		}
 	}
 
-	/* Footer: instructions */
-	int footer_y = oy + overlay_h - fh;
-	Font_DrawString(wdw, "\\777777ff", ox + fw, footer_y, 1);
-	Font_DrawString(wdw, "Esc:close", ox + fw, footer_y, 1);
+	/* Footer: instructions — at bottom of overlay */
+	int footer_y = gl_oy - overlay_h;
+	Font_DrawString(wdw, "\\777777ffEsc:close", ox + fw * text_zoom, footer_y, text_zoom);
 }
 
 static void
@@ -282,33 +305,19 @@ GLWindow_OptionsEditor_HandleKey(GLWindow_State* wdw, SDL_Keysym* keysym)
 
 	if (keysym->sym == SDLK_ESCAPE) {
 		/* Persist changes to opts before closing */
-		GLWindow_OptionsEditor_SyncToOpts(wdw);
+		GLWindow_OptionsEditor_Persist(wdw);
 		ed->active = false;
 		return;
 	}
 
-	/* Left/right adjust selected value by 1 */
-	switch (keysym->sym) {
-		case SDLK_LEFT:
-			switch (ed->selected) {
-				case 0: if (wdw->clrcolor[0] > 1) wdw->clrcolor[0] -= 1.0f; break;
-				case 1: if (wdw->clrcolor[1] > 1) wdw->clrcolor[1] -= 1.0f; break;
-				case 2: if (wdw->clrcolor[2] > 1) wdw->clrcolor[2] -= 1.0f; break;
-				case 3: if (wdw->font_shake_factor > 1.0f) wdw->font_shake_factor -= 1.0f; break;
-				case 4: if (wdw->font_zoom_factor > 1.0f) wdw->font_zoom_factor -= 1.0f; break;
-				case 5: if (wdw->perturb_waterfall_factor > 1.0f) wdw->perturb_waterfall_factor -= 1.0f; break;
-			}
-			break;
-		case SDLK_RIGHT:
-			switch (ed->selected) {
-				case 0: if (wdw->clrcolor[0] < 254.0f) wdw->clrcolor[0] += 1.0f; break;
-				case 1: if (wdw->clrcolor[1] < 254.0f) wdw->clrcolor[1] += 1.0f; break;
-				case 2: if (wdw->clrcolor[2] < 254.0f) wdw->clrcolor[2] += 1.0f; break;
-				case 3: if (wdw->font_shake_factor < 100.0f) wdw->font_shake_factor += 1.0f; break;
-				case 4: if (wdw->font_zoom_factor < 100.0f) wdw->font_zoom_factor += 1.0f; break;
-				case 5: if (wdw->perturb_waterfall_factor < 100.0f) wdw->perturb_waterfall_factor += 1.0f; break;
-			}
-			break;
+	/* Left/right adjust selected value by 0.05 */
+	if (keysym->sym == SDLK_LEFT || keysym->sym == SDLK_RIGHT) {
+		EditTarget et = get_edit_target(wdw, ed->selected);
+		float delta = keysym->sym == SDLK_LEFT ? -0.05f : 0.05f;
+		float new_val = *et.ptr + delta;
+		if (new_val < et.min_val) new_val = et.min_val;
+		if (new_val > et.max_val) new_val = et.max_val;
+		*et.ptr = new_val;
 	}
 
 	/* Up/down navigate */
@@ -323,7 +332,8 @@ GLWindow_OptionsEditor_HandleKey(GLWindow_State* wdw, SDL_Keysym* keysym)
 		case SDLK_DOWN:
 			if (ed->selected + 1 < NUM_OPTIONS) {
 				ed->selected++;
-				size_t visible = (wdw->height / wdw->font->font_height) - 3;
+				int fh = wdw->font->font_height * 2;
+				size_t visible = (size_t)((wdw->height - fh * 3) / fh);
 				if (visible < 2) visible = 2;
 				if (ed->selected >= ed->scroll + visible)
 					ed->scroll = ed->selected - visible + 1;
@@ -461,6 +471,13 @@ Vis_UpdateReactiveColor(Vis_State* v)
 
 	v->mean_energy_band_div16 /= v->fft_len / 16;
 
+	/* Track peak energy with slow decay for normalization */
+	if (v->mean_energy_band_div16 > v->peak_energy)
+		v->peak_energy = v->mean_energy_band_div16;
+	else
+		v->peak_energy *= PEAK_DECAY;
+	if (v->peak_energy < 1.f) v->peak_energy = 1.f;
+
 	if (bass_n)   bass /= bass_n;
 	if (mids_n)   mids /= mids_n;
 	if (treble_n) treble /= treble_n;
@@ -578,6 +595,8 @@ Vis_Update(GLWindow_State* wdw)
 		Vis_ScrollWaterfall(v);
 	} else {
 		Vis_DecayReactiveColor(v);
+		/* Decay energy so shake/zoom/perturb/flash stop when paused */
+		v->mean_energy_band_div16 *= 0.9f;
 	}
 }
 
@@ -591,17 +610,21 @@ Vis_UpdateStars(Vis_State* v, const GLWindow_State* wdw)
 	for (size_t i = 0; i < v->nstars; i++) {
 		Star* s = &v->stars[i];
 
-		s->xpos += s->speed_x;
-		s->ypos += s->speed_y;
+		if (playing) {
+			s->xpos += s->speed_x;
+			s->ypos += s->speed_y;
+			s->phase = (s->phase + s->phase_inc) % 360;
+			s->rotation = (s->rotation + s->rotation_inc) % 360;
+		}
 
 		if (s->ypos >= (int)wdw->height) {
 			s->visible = playing;
+			s->xpos = rand() % wdw->width;
+			s->ypos = 0;
 		}
 
 		s->xpos %= wdw->width;
 		s->ypos %= wdw->height;
-		s->phase = (s->phase + s->phase_inc) % 360;
-		s->rotation = (s->rotation + s->rotation_inc) % 360;
 	}
 }
 
@@ -676,87 +699,188 @@ scope_sample(const Vis_State* v, float fidx)
 	return (1.f - frac) * (float)v->vis_buf[i0] + frac * (float)v->vis_buf[i1];
 }
 
+/* ── Scope render helpers ─────────────────────────────────────────────── */
+
+typedef struct ScopeDrawParams {
+	void (*expand_fn)(float *y0, float *y1, float expand);
+	int  offset;
+	void (*color_fn)(GLWindow_State* wdw, size_t i);
+} ScopeDrawParams;
+
+static inline void
+scope_expand_symmetric(float *y0, float *y1, float expand)
+{
+	*y0 -= expand / 2.f;
+	*y1 += expand / 2.f;
+}
+
+static inline void
+scope_expand_toward_higher(float *y0, float *y1, float expand)
+{
+	if (*y0 < *y1) {
+		*y0 -= expand / 2.f;
+		*y1 += expand / 2.f;
+	} else {
+		*y0 += expand / 2.f;
+		*y1 -= expand / 2.f;
+	}
+}
+
+static void
+scope_color_black(GLWindow_State* wdw, size_t i)
+{
+	(void)wdw; (void)i;
+	glColor4ub(0, 0, 0, 255);
+}
+
+static void
+scope_color_filled(GLWindow_State* wdw, size_t i)
+{
+	glColor4ub(255, (int)((float)(i / 2) * 255.f / (float)wdw->width * 2), 0, 255);
+}
+
+static void
+draw_scope(GLWindow_State* wdw, const ScopeDrawParams* p)
+{
+	Vis_State* v = wdw->v;
+	size_t n = (size_t)wdw->width * 2;
+	if (n < 4) return;
+
+	float scale = SCOPE_SCALE;
+	float vis_scale = (float)v->vis_len / (float)(wdw->width * 2);
+	int offset = p->offset;
+
+	glBegin(GL_QUADS);
+	for (size_t i = 0; i < n - 2; i += 2) {
+		float src_i = (float)i * vis_scale;
+		float src_i2 = (float)(i + 2) * vis_scale;
+
+		float point = (scope_sample(v, src_i) + scope_sample(v, src_i + 1)) / scale;
+		float next_point = (scope_sample(v, src_i2) + scope_sample(v, src_i2 + 1)) / scale;
+
+		float y0 = wdw->height / 2.f + point;
+		float y1 = wdw->height / 2.f + next_point;
+		float expand = 2.f - fabs(next_point - point);
+
+		if (expand > 0)
+			p->expand_fn(&y0, &y1, expand);
+
+		p->color_fn(wdw, i);
+		glVertex2i((int)i - SCOPE_HALF_W + offset, (int)(y0 - offset));
+		glVertex2i((int)i + SCOPE_HALF_W + offset, (int)(y0 - offset));
+		glVertex2i((int)i + SCOPE_HALF_W + SCOPE_STEP + offset, (int)(y1 - offset));
+		glVertex2i((int)i - SCOPE_HALF_W + SCOPE_STEP + offset, (int)(y1 - offset));
+	}
+	glEnd();
+}
+
+static const ScopeDrawParams scope_outline_params = {
+	.expand_fn = scope_expand_symmetric,
+	.offset    = SCOPE_OFFSET,
+	.color_fn  = scope_color_black,
+};
+
+static const ScopeDrawParams scope_filled_params = {
+	.expand_fn = scope_expand_toward_higher,
+	.offset    = 0,
+	.color_fn  = scope_color_filled,
+};
+
 static void
 draw_scope_outline(GLWindow_State* wdw)
 {
-	Vis_State* v = wdw->v;
-	float scale = SCOPE_SCALE;
-	/* Map screen pixel index → vis_buf index with linear interpolation */
-	float vis_scale = (float)v->vis_len / (float)(wdw->width * 2);
-
-	glBegin(GL_QUADS);
-	{
-		size_t n = (size_t)wdw->width * 2;
-		if (n < 4) return;
-		for (size_t i = 0; i < n - 2; i += 2) {
-			float src_i = (float)i * vis_scale;
-			float src_i2 = (float)(i + 2) * vis_scale;
-
-			/* Average stereo pair at each position */
-			float point = (scope_sample(v, src_i) + scope_sample(v, src_i + 1)) / scale;
-			float next_point = (scope_sample(v, src_i2) + scope_sample(v, src_i2 + 1)) / scale;
-
-			float y0 = wdw->height / 2.f + point;
-			float y1 = wdw->height / 2.f + next_point;
-			float expand = 2.f - fabs(next_point - point);
-
-			if (expand > 0) {
-				y0 -= expand / 2.f;
-				y1 += expand / 2.f;
-			}
-
-			glColor4ub(0, 0, 0, 255);
-			glVertex2i((int)i - SCOPE_HALF_W + SCOPE_OFFSET, (int)(y0 - SCOPE_OFFSET));
-			glVertex2i((int)i + SCOPE_HALF_W + SCOPE_OFFSET, (int)(y0 - SCOPE_OFFSET));
-			glVertex2i((int)i + SCOPE_HALF_W + SCOPE_STEP + SCOPE_OFFSET, (int)(y1 - SCOPE_OFFSET));
-			glVertex2i((int)i - SCOPE_HALF_W + SCOPE_STEP + SCOPE_OFFSET, (int)(y1 - SCOPE_OFFSET));
-		}
-	}
-	glEnd();
+	draw_scope(wdw, &scope_outline_params);
 }
 
 static void
 draw_scope_filled(GLWindow_State* wdw)
 {
+	draw_scope(wdw, &scope_filled_params);
+}
+
+/* ── Circular (radial) FFT rendering ─────────────────────────────────── */
+
+static void
+draw_circular_fft(GLWindow_State* wdw)
+{
 	Vis_State* v = wdw->v;
-	float scale = SCOPE_SCALE;
-	float vis_scale = (float)v->vis_len / (float)(wdw->width * 2);
+	size_t n_bars = v->fft_len / 2 - 2;  /* use positive half of FFT */
 
-	glBegin(GL_QUADS);
-	{
-		size_t n = (size_t)wdw->width * 2;
-		if (n < 4) return;
-		for (size_t i = 0; i < n - 2; i += 2) {
-			float src_i = (float)i * vis_scale;
-			float src_i2 = (float)(i + 2) * vis_scale;
+	/* Center and radii */
+	float cx = (float)wdw->width / 2.f;
+	float cy = (float)wdw->height / 2.f;
+	float inner_r = fminf(wdw->width, wdw->height) * 0.3f;
+	float outer_r = fminf(wdw->width, wdw->height) * 0.9f;
 
-			/* Average stereo pair at each position */
-			float point = (scope_sample(v, src_i) + scope_sample(v, src_i + 1)) / scale;
-			float next_point = (scope_sample(v, src_i2) + scope_sample(v, src_i2 + 1)) / scale;
+	/* Linearize spectrum: convert log10 → linear energy in one pass */
+	float* lin = (float*) alloca(n_bars * sizeof(float));
+	for (size_t i = 0; i < n_bars; i++)
+		lin[i] = powf(10.f, v->spectrum[i]);
 
-			float y0 = wdw->height / 2.f + point;
-			float y1 = wdw->height / 2.f + next_point;
-			float expand = 2.f - fabs(next_point - point);
+	/* Normalize scale: find max energy in positive half */
+	float max_energy = 0;
+	for (size_t i = 0; i < n_bars; i++)
+		if (lin[i] > max_energy)
+			max_energy = lin[i];
+	if (max_energy <= 0) max_energy = 1;
 
-			if (expand > 0) {
-				/* Expand toward the higher point. */
-				if (y0 < y1) {
-					y0 -= expand / 2.f;
-					y1 += expand / 2.f;
-				} else {
-					y0 += expand / 2.f;
-					y1 -= expand / 2.f;
-				}
-			}
+	float bar_scale = outer_r - inner_r;
 
-			glColor4ub(255, (int)((float)(i / 2) * 255.f / (float)wdw->width * 2), 0, 255);
-			glVertex2i((int)i - SCOPE_HALF_W, (int)y0);
-			glVertex2i((int)i + SCOPE_HALF_W, (int)y0);
-			glVertex2i((int)i + SCOPE_HALF_W + SCOPE_STEP, (int)y1);
-			glVertex2i((int)i - SCOPE_HALF_W + SCOPE_STEP, (int)y1);
+	GL_OrthoOn(wdw->width, wdw->height);
+	glDisable(GL_TEXTURE_2D);
+	glEnable(GL_BLEND);
+	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+	size_t seg = n_bars > 0 ? n_bars : 1;
+	float angle_step = 2.f * M_PI / (float)seg;
+
+	/* Draw strands radiating from center — thin lines from origin outward
+	 * drawn backwards so lin[0] is on top at the center overlap */
+	glDisable(GL_DEPTH_TEST);
+	glLineWidth(8.0f);
+	glBegin(GL_LINES);
+	unsigned char r = 0, g = 0, b = 0;
+	for (ssize_t i = (ssize_t)n_bars - 1; i >= 0; i--) {
+		float angle = (float)i * angle_step + M_PI;
+		float spec = sqrtf(lin[i] / max_energy);
+		float bar_len = inner_r * 0.3f + spec * bar_scale;
+
+		/* Color by energy: low→high maps to cool→hot (blue → cyan → green → yellow → white) */
+		if (spec < 0.25f) {
+			float t = spec / 0.25f;
+			r = (unsigned char)(30.f * t);
+			g = (unsigned char)(60.f + 140.f * t);
+			b = (unsigned char)(180.f + 75.f * t);
+		} else if (spec < 0.5f) {
+			float t = (spec - 0.25f) / 0.25f;
+			r = (unsigned char)(30.f + 30.f * t);
+			g = (unsigned char)(200.f + 55.f * t);
+			b = (unsigned char)(255.f * (1.f - t));
+		} else if (spec < 0.75f) {
+			float t = (spec - 0.5f) / 0.25f;
+			r = (unsigned char)(60.f + 195.f * t);
+			g = (unsigned char)(255.f);
+			b = (unsigned char)(255.f * (1.f - t));
+		} else {
+			float t = (spec - 0.75f) / 0.25f;
+			r = (unsigned char)(255.f);
+			g = (unsigned char)(255.f);
+			b = (unsigned char)(255.f * t);
 		}
+
+		glColor4ub(r, g, b, 220);
+
+		float ox = cx + bar_len * cosf(angle);
+		float oy = cy + bar_len * sinf(angle);
+
+		glVertex2f(cx, cy);
+		glVertex2f(ox, oy);
 	}
 	glEnd();
+
+	glEnable(GL_TEXTURE_2D);
+	glEnable(GL_DEPTH_TEST);
+	GL_OrthoOff();
 }
 
 /* ── Visualization rendering ─────────────────────────────────────────── */
@@ -770,46 +894,59 @@ GLUI_DrawVis(GLWindow_State* wdw)
 	Vis_UpdateStars(v, wdw);
 	GLUI_DrawStars(wdw, false);
 
-	if (wdw->vis == VIS_FFT && playing) {
-		float scale = wdw->height / log10(1 << 24);
-		float bar_w = (float) wdw->width * 2.f / v->fft_len;
-
-		glBindTexture(GL_TEXTURE_2D, 0);
-		GL_OrthoOn(wdw->width, wdw->height);
-		glBegin(GL_QUADS);
+	switch (wdw->vis) {
+	case VIS_FFT:
+		if (!playing)
+			break;
 		{
-			for (size_t i = 3; i < v->fft_len / 2 + 2; i += 2) {
-				glColor4ub(0, 0, 0, 255);
+			float scale = wdw->height / log10(1 << 24);
+			float bar_w = (float) wdw->width * 2.f / v->fft_len;
 
-				glVertex2f((i - 3) * bar_w + 8, (int) (v->spectrum[i - 2] * scale));
-				glVertex2f((i - 1) * bar_w + 8, (int) (v->spectrum[i] * scale));
+			glBindTexture(GL_TEXTURE_2D, 0);
+			GL_OrthoOn(wdw->width, wdw->height);
+			glBegin(GL_QUADS);
+			{
+				for (size_t i = 3; i < v->fft_len / 2 + 2; i += 2) {
+					glColor4ub(0, 0, 0, 255);
 
-				glVertex2f((i - 1) * bar_w + 8, 0);
-				glVertex2f((i - 3) * bar_w + 8, 0);
+					glVertex2f((i - 3) * bar_w + 8, (int) (v->spectrum[i - 2] * scale));
+					glVertex2f((i - 1) * bar_w + 8, (int) (v->spectrum[i] * scale));
 
-				glColor4ub(255, (int) ((float) i * 255.f / (float) v->fft_len), 0, 255);
+					glVertex2f((i - 1) * bar_w + 8, 0);
+					glVertex2f((i - 3) * bar_w + 8, 0);
 
-				glVertex2f((i - 3) * bar_w, (int) (v->spectrum[i - 2] * scale));
-				glVertex2f((i - 1) * bar_w, (int) (v->spectrum[i] * scale));
+					glColor4ub(255, (int) ((float) i * 255.f / (float) v->fft_len), 0, 255);
 
-				glVertex2f((i - 1) * bar_w, 0);
-				glVertex2f((i - 3) * bar_w, 0);
+					glVertex2f((i - 3) * bar_w, (int) (v->spectrum[i - 2] * scale));
+					glVertex2f((i - 1) * bar_w, (int) (v->spectrum[i] * scale));
+
+					glVertex2f((i - 1) * bar_w, 0);
+					glVertex2f((i - 3) * bar_w, 0);
+				}
 			}
+			glEnd();
+			GL_OrthoOff();
 		}
-		glEnd();
-		GL_OrthoOff();
-	}
+		break;
 
-	if (wdw->vis == VIS_SCOPE && playing) {
+	case VIS_SCOPE:
+		if (!playing)
+			break;
 		glBindTexture(GL_TEXTURE_2D, 0);
 		GL_OrthoOn(wdw->width, wdw->height);
 		draw_scope_outline(wdw);
 		draw_scope_filled(wdw);
 		GL_OrthoOff();
-	}
+		break;
 
-	/* Waterfall (spectrogram) mode — covers status bar, browser, and song info */
-	if (wdw->vis == VIS_WATERFALL) {
+	case VIS_CIRCULAR:
+		if (!playing)
+			break;
+		glBindTexture(GL_TEXTURE_2D, 0);
+		draw_circular_fft(wdw);
+		break;
+
+	case VIS_WATERFALL:
 		GL_OrthoOn(wdw->width, wdw->height);
 		glEnable(GL_TEXTURE_2D);
 		glBindTexture(GL_TEXTURE_2D, v->wf_tex);
@@ -829,6 +966,13 @@ GLUI_DrawVis(GLWindow_State* wdw)
 		int cell_w = wdw->width / WF_COLS;
 		int cell_h = wf_h / WF_ROWS;
 
+		/* Find max log-spectrum for normalization (spectrum is log10, not linear) */
+		float max_spec = 0;
+		for (size_t i = 0; i < v->wf_width; i++)
+			if (v->spectrum[i] > max_spec)
+				max_spec = v->spectrum[i];
+		if (max_spec <= 0) max_spec = 1.f;
+
 		glBegin(GL_QUADS);
 		{
 			for (int r = 0; r < WF_ROWS; r++) {
@@ -839,7 +983,7 @@ GLUI_DrawVis(GLWindow_State* wdw)
 
 					/* Sample local FFT energy for per-column reactivity */
 					size_t spec_idx = (size_t)(nx * (v->wf_width - 1));
-					float spec_norm = v->wf_width > 0 ? v->spectrum[spec_idx] / INT16_MAX_F : 0.f;
+					float spec_norm = v->wf_width > 0 ? v->spectrum[spec_idx] / max_spec : 0.f;
 
 					/* Combine global energy with local spectral energy */
 					float energy = (energy_factor + spec_norm) * 0.5f;
@@ -883,6 +1027,10 @@ GLUI_DrawVis(GLWindow_State* wdw)
 		glEnd();
 		glBindTexture(GL_TEXTURE_2D, 0);
 		GL_OrthoOff();
+		break;
+
+	default:
+		break;
 	}
 
 	GLUI_DrawStars(wdw, true);
@@ -926,7 +1074,7 @@ GLUI_DrawSongInfo(GLWindow_State* wdw, int y, int title_zoom, int info_zoom)
 	ntracks = AudioRenderer_NTracks(wdw->ps->am->active_ar);
 
 	if (ntracks > 1) {
-		safe_snprintf(tmp, MODP_STR_LENGTH,
+		snprintf(tmp, MODP_STR_LENGTH,
 		                "\\ffffff80[%.2d/%.2d]",
 		                AudioRenderer_Track(wdw->ps->am->active_ar) + 1,
 		                ntracks);
@@ -1002,7 +1150,7 @@ GLUI_DrawBrowser(GLWindow_State* wdw, int y, int zoom)
 		/* Hover highlight: white for hovered item, default for others */
 		const char* item_color = (i == (size_t)wdw->hover_item) ? "\\ffffffff" : "";
 
-		safe_snprintf(tmp_str, MODP_STR_LENGTH,
+		snprintf(tmp_str, MODP_STR_LENGTH,
 		                "%s%s%s",
 		                item_color,
 		                isdir && name ? "\\" : " ", name ? name : "");
@@ -1024,7 +1172,7 @@ GLUI_DrawStatusBar(GLWindow_State* wdw, int y, int zoom)
 	glColor4ub(GRAY(32, 64));
 	GL_DrawRec(0, y, wdw->width, wdw->font->font_height * zoom, true, wdw->width, wdw->height);
 
-	safe_snprintf(tmp_str, MODP_STR_LENGTH,
+	snprintf(tmp_str, MODP_STR_LENGTH,
 	        "\\999999fff1:\\ccccccffainc/%s\\777777ff;"
 	        "\\999999fff2:\\ccccccffarnd/%s\\777777ff;"
 	        "\\999999fff3,f4:\\ccccccffmlth/%s%.3u"
@@ -1033,7 +1181,8 @@ GLUI_DrawStatusBar(GLWindow_State* wdw, int y, int zoom)
 	        (wdw->ps->auto_rnd ? "\\00dd00ff1" : "\\dd0000ff0"),
 	        (wdw->ps->auto_inc ? "\\00ff00ff" : "\\ff0000ff"), wdw->ps->min_length,
 	        wdw->vis == VIS_FFT ? "\\dddd00fff" :
-	        (wdw->vis == VIS_SCOPE ? "\\dddd00ffo" : "\\dddd00ffw"));
+	        (wdw->vis == VIS_SCOPE ? "\\dddd00ffo" :
+	        (wdw->vis == VIS_CIRCULAR ? "\\dddd00ffc" : "\\dddd00ffw")));
 
 	int x = wdw->width - (wdw->font->font_width * zoom * STATUS_BAR_CHAR_COUNT);
 	Font_DrawString(wdw, tmp_str, x, y - (wdw->font->font_height * zoom), zoom);
@@ -1051,7 +1200,7 @@ GLUI_DrawSongTime(GLWindow_State* wdw, int y, int zoom)
 	glColor4ub(GRAY(32, 64));
 	GL_DrawRec(0, y, wdw->width, wdw->font->font_height * zoom, true, wdw->width, wdw->height);
 
-	safe_snprintf(tmp_str, MODP_STR_LENGTH,
+	snprintf(tmp_str, MODP_STR_LENGTH,
 	                "\\aaaaaa80%.2d:%.2d\\cccccc80/\\aaaaaa80%.2d:%.2d",
 	                (int)(song_pos / 60.f), ((int)(song_pos)) % 60,
 	                (int)(song_len / 60.f), ((int)(song_len)) % 60);
@@ -1170,19 +1319,19 @@ GLWindow_HandleKeyDown(GLWindow_State* wdw, SDL_Keysym* keysym)
 			GLWindow_HandleFKey(wdw, keysym->sym - SDLK_F1 + 1);
 			break;
 		case SDLK_F6:
-			wdw->clrcolor[0] = (float)rand() / RAND_MAX;
-			wdw->clrcolor[1] = (float)rand() / RAND_MAX;
-			wdw->clrcolor[2] = (float)rand() / RAND_MAX;
+			wdw->clrcolor[0] = (float)rand() / RAND_MAX * 255.f;
+			wdw->clrcolor[1] = (float)rand() / RAND_MAX * 255.f;
+			wdw->clrcolor[2] = (float)rand() / RAND_MAX * 255.f;
 			break;
 		case SDLK_o:
 			if (wdw->editor) {
 				if (wdw->editor->active) {
 					/* Close editor — persist changes to opts */
-					GLWindow_OptionsEditor_SyncToOpts(wdw);
+					GLWindow_OptionsEditor_Persist(wdw);
 					wdw->editor->active = false;
 				} else {
-					/* Open editor — sync current window state into opts */
-					GLWindow_OptionsEditor_SyncToOpts(wdw);
+					/* Open editor — load current opts into window fields */
+					GLWindow_OptionsEditor_Load(wdw);
 					wdw->editor->selected = 0;
 					wdw->editor->scroll = 0;
 					wdw->editor->active = true;
@@ -1254,6 +1403,7 @@ GLWindow_ProcessEvents(GLWindow_State* wdw, bool* got_input)
 					int mx = event.button.x;
 					int gl_my = wdw->height - event.button.y; /* SDL Y → OpenGL Y */
 					int status_h = wdw->font->font_height * 3;
+					bool handled = false;
 
 					/* Check status bar (F-key toggles)
 					 * Font_DrawString draws text at y - font_height*zoom, so the text
@@ -1265,18 +1415,17 @@ GLWindow_ProcessEvents(GLWindow_State* wdw, bool* got_input)
 						int f;
 						for (f = 0; f < 5; f++) {
 							if (rel_x >= wdw->layout_fkey_x[f] &&
-							    rel_x < wdw->layout_fkey_x[f] + wdw->layout_fkey_w[f])
+							    rel_x < wdw->layout_fkey_x[f] + wdw->layout_fkey_w[f]) {
+								SDL_Keysym ks = { .sym = SDLK_F1 + f };
+								GLWindow_HandleKeyDown(wdw, &ks);
+								handled = true;
 								break;
-						}
-						if (f < 5) {
-							SDL_Keysym ks = { .sym = SDLK_F1 + f };
-							GLWindow_HandleKeyDown(wdw, &ks);
-							break;
+							}
 						}
 					}
 
-					/* Check browser items */
-					{
+					/* Check browser items (only if F-key wasn't hit) */
+					if (!handled) {
 						int idx = browser_item_at_mouse_y(wdw);
 						if (idx >= 0) {
 							/* Navigate to clicked item: idx 0 means stay, idx 1 means +1, etc. */

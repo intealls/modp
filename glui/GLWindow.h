@@ -62,6 +62,7 @@ struct Vis_State {
 	float* spectrum;
 	float* window;
 	float mean_energy_band_div16;
+	float peak_energy;      // running peak energy for normalization (decays slowly)
 	fftwf_complex* result;
 
 	/* Reactive background: bass→R, mids→G, treble→B,
@@ -75,7 +76,8 @@ struct Vis_State {
 	GLuint         wf_tex;      // OpenGL 2D texture handle
 };
 
-typedef enum Vis { VIS_FFT = 0, VIS_SCOPE = 1, VIS_WATERFALL = 2, VIS_NONE = 3 } Vis;
+typedef enum Vis { VIS_FFT = 0, VIS_SCOPE = 1, VIS_WATERFALL = 2, VIS_CIRCULAR = 3,
+	VIS_NONE = 4 } Vis;
 
 /* ── Options Editor ──────────────────────────────────────────────────── */
 
