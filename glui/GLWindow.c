@@ -1182,7 +1182,8 @@ GLUI_DrawStatusBar(GLWindow_State* wdw, int y, int zoom)
 	        (wdw->ps->auto_inc ? "\\00ff00ff" : "\\ff0000ff"), wdw->ps->min_length,
 	        wdw->vis == VIS_FFT ? "\\dddd00fff" :
 	        (wdw->vis == VIS_SCOPE ? "\\dddd00ffo" :
-	        (wdw->vis == VIS_CIRCULAR ? "\\dddd00ffc" : "\\dddd00ffw")));
+	        (wdw->vis == VIS_CIRCULAR ? "\\dddd00ffc" :
+	        (wdw->vis == VIS_WATERFALL ? "\\dddd00ffw" : "\\dddd00ffx"))));
 
 	int x = wdw->width - (wdw->font->font_width * zoom * STATUS_BAR_CHAR_COUNT);
 	Font_DrawString(wdw, tmp_str, x, y - (wdw->font->font_height * zoom), zoom);
@@ -1269,7 +1270,7 @@ GLWindow_HandleFKey(GLWindow_State* wdw, int fkey)
 		case 2: Player_ToggleAutoRnd(wdw->ps); break;
 		case 3: Player_AlterMinLength(wdw->ps, -15); break;
 		case 4: Player_AlterMinLength(wdw->ps, 15); break;
-		case 5: if (++wdw->vis == VIS_NONE) wdw->vis = VIS_FFT; break;
+		case 5: wdw->vis = (Vis)((wdw->vis + 1) % (VIS_NONE + 1)); break;
 		default: break;
 	}
 }
