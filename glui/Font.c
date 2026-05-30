@@ -63,9 +63,9 @@ Font_DrawString(GLWindow_State* wdw, const char* str, int x, int y, int zoom)
 		glPushMatrix();
 		glTranslatef(x, y, 0.f);
 		while (*str != '\0') {
-				float rnd_x = ((((float)rand() / RAND_MAX) - 0.5) * jit_factor) * wdw->font_shake_factor;
-				float rnd_y = ((((float)rand() / RAND_MAX) - 0.5) * jit_factor) * wdw->font_shake_factor;
-				float rot_angle = ((((float)rand() / RAND_MAX) - 0.5) * jit_factor) * wdw->font_rotation_factor;
+				float rnd_x = ((((float)rand() / RAND_MAX) - 0.5) * jit_factor) * wdw->opts->ui.font_shake_factor;
+				float rnd_y = ((((float)rand() / RAND_MAX) - 0.5) * jit_factor) * wdw->opts->ui.font_shake_factor;
+				float rot_angle = ((((float)rand() / RAND_MAX) - 0.5) * jit_factor) * wdw->opts->ui.font_rotation_factor;
 
 				if (*str == '\\') {
 					if (hc_to_rgba((str + 1), wdw->font->color)) {
@@ -87,7 +87,7 @@ Font_DrawString(GLWindow_State* wdw, const char* str, int x, int y, int zoom)
 				float fh = wdw->font->font_height;
 				float tw = wdw->font->tex_width;
 				float th = wdw->font->tex_height;
-				float zoom_x = zoom * ((((float)rand() / RAND_MAX)) * jit_factor) * wdw->font_zoom_factor;
+				float zoom_x = zoom * ((((float)rand() / RAND_MAX)) * jit_factor) * wdw->opts->ui.font_zoom_factor;
 
 				// Rotate and shake the outline around its center
 				glPushMatrix();

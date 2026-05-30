@@ -17,6 +17,15 @@ typedef struct Vis_State Vis_State;
 #include "RingBuffer.h"
 #include "Player.h"
 
+typedef struct UiCfg {
+	float clr[3];               /* Background color RGB (0–1) */
+	float font_shake_factor;    /* Text shake synced to music */
+	float font_zoom_factor;     /* Text zoom synced to music */
+	float font_rotation_factor; /* Text rotation synced to music */
+	float bg_flash_factor;      /* Background energy flash */
+	float perturb_waterfall_factor; /* Spectrogram perturbation */
+} UiCfg;
+
 typedef struct Options {
 	char path[_TINYDIR_PATH_MAX];
 	char fontpath[_TINYDIR_PATH_MAX];
@@ -28,15 +37,8 @@ typedef struct Options {
 	bool auto_rnd;
 	size_t min_length;
 	float fps_limit;
-	float clr_r;
-	float clr_g;
-	float clr_b;
-	 float font_shake_factor;
-		float font_zoom_factor;
-		float font_rotation_factor;
-		float bg_flash_factor;
-		float perturb_waterfall_factor;
-	} Options;
+	UiCfg ui;
+} Options;
 
 typedef struct Star {
 	int speed_x, speed_y,
@@ -74,6 +76,10 @@ struct Vis_State {
 	size_t         wf_width;    // horizontal resolution (FFT bins)
 	size_t         wf_height;   // vertical scroll depth (rows)
 	GLuint         wf_tex;      // OpenGL 2D texture handle
+
+	/* Circular FFT linearized spectrum buffer (heap-allocated, reused each frame) */
+	float* lin;
+	size_t lin_cap;
 };
 
 typedef enum Vis { VIS_FFT = 0, VIS_SCOPE = 1, VIS_WATERFALL = 2, VIS_CIRCULAR = 3,
@@ -98,15 +104,8 @@ struct GLWindow_State {
 
 	Player_State* ps;
 
-	/* Options pointer — editor writes directly into this */
+	/* Options pointer — single source of truth for UI config */
 	Options* opts;
-
-	float clrcolor[3];
-	float font_shake_factor;
-	float font_zoom_factor;
-	float font_rotation_factor;
-	float bg_flash_factor;
-	float perturb_waterfall_factor;
 
 	/* Options editor state */
 	OptionsEditor* editor;

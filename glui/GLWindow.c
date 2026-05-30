@@ -92,7 +92,7 @@ struct OptionsEditor {
 	size_t scroll;            /* Scroll offset for the list */
 };
 
-/* ── Options list (6 entries) ────────────────────────────────────────── */
+/* ── Options list (7 entries) ────────────────────────────────────────── */
 
 static OptionEntry option_list[] = {
 	/* Background color */
@@ -124,45 +124,17 @@ get_edit_target(GLWindow_State* wdw, size_t idx)
 	EditTarget et;
 	et.min_val = option_list[idx].min_val;
 	et.max_val = option_list[idx].max_val;
+
 	switch (idx) {
-		case 0: et.ptr = &wdw->clrcolor[0]; break;
-		case 1: et.ptr = &wdw->clrcolor[1]; break;
-		case 2: et.ptr = &wdw->clrcolor[2]; break;
-		case 3: et.ptr = &wdw->font_shake_factor; break;
-		case 4: et.ptr = &wdw->font_zoom_factor; break;
-		case 5: et.ptr = &wdw->font_rotation_factor; break;
-		case 6: et.ptr = &wdw->perturb_waterfall_factor; break;
-		default: assert(0 && "invalid option index"); return (EditTarget){ 0 };
+		case 0: et.ptr = &wdw->opts->ui.clr[0]; break;
+		case 1: et.ptr = &wdw->opts->ui.clr[1]; break;
+		case 2: et.ptr = &wdw->opts->ui.clr[2]; break;
+		case 3: et.ptr = &wdw->opts->ui.font_shake_factor; break;
+		case 4: et.ptr = &wdw->opts->ui.font_zoom_factor; break;
+		case 5: et.ptr = &wdw->opts->ui.font_rotation_factor; break;
+		case 6: et.ptr = &wdw->opts->ui.perturb_waterfall_factor; break;
 	}
 	return et;
-}
-
-/* ── Sync window fields → persistent opts (called on close) ──────────── */
-
-static void
-GLWindow_OptionsEditor_Persist(GLWindow_State* wdw)
-{
-	wdw->opts->clr_r             = wdw->clrcolor[0];
-	wdw->opts->clr_g             = wdw->clrcolor[1];
-	wdw->opts->clr_b             = wdw->clrcolor[2];
-	wdw->opts->font_shake_factor = wdw->font_shake_factor;
-	wdw->opts->font_zoom_factor  = wdw->font_zoom_factor;
-	wdw->opts->font_rotation_factor = wdw->font_rotation_factor;
-	wdw->opts->perturb_waterfall_factor = wdw->perturb_waterfall_factor;
-}
-
-/* ── Sync persistent opts → window fields (called on open) ───────────── */
-
-static void
-GLWindow_OptionsEditor_Load(GLWindow_State* wdw)
-{
-	wdw->clrcolor[0]             = wdw->opts->clr_r;
-	wdw->clrcolor[1]             = wdw->opts->clr_g;
-	wdw->clrcolor[2]             = wdw->opts->clr_b;
-	wdw->font_shake_factor       = wdw->opts->font_shake_factor;
-	wdw->font_zoom_factor        = wdw->opts->font_zoom_factor;
-	wdw->font_rotation_factor    = wdw->opts->font_rotation_factor;
-	wdw->perturb_waterfall_factor = wdw->opts->perturb_waterfall_factor;
 }
 
 /* ── Options Editor functions ────────────────────────────────────────── */
@@ -221,25 +193,25 @@ GLUI_DrawOptionsEditor(GLWindow_State* wdw)
 
 	/* Dark semi-transparent background — derived from user's BG color */
 	glColor4ub(
-	    (uint8_t)(wdw->clrcolor[0] / 8),
-	    (uint8_t)(wdw->clrcolor[1] / 8),
-	    (uint8_t)(wdw->clrcolor[2] / 8),
+	    (uint8_t)(wdw->opts->ui.clr[0] * 32),
+	    (uint8_t)(wdw->opts->ui.clr[1] * 32),
+	    (uint8_t)(wdw->opts->ui.clr[2] * 32),
 	    220);
 	GL_DrawRec(ox, gl_oy, overlay_w, overlay_h, true, (int)wdw->width, (int)wdw->height);
 
 	/* Title — at top of overlay */
 	Font_DrawString(wdw, "\\00ddffffOptions Editor",
 	                ox + fw * text_zoom,
-	                gl_oy - fh * text_zoom * 3, 2 * text_zoom);
+	                gl_oy - fh * text_zoom, 2 * text_zoom);
 
 	/* Separator line — below title */
 	glColor4ub(100, 100, 150, 180);
-	GL_DrawRec(ox, gl_oy - fh * text_zoom * 4 - fh * text_zoom / 2,
+	GL_DrawRec(ox, gl_oy - fh * text_zoom * 2,
 	           overlay_w, 1, false, (int)wdw->width, (int)wdw->height);
 
 	/* Options list (scrollable) */
-	int list_y = gl_oy - fh * text_zoom * 5;
-	size_t visible_rows = (size_t)((wdw->height - fh * text_zoom * 3) / (fh * text_zoom));
+	int list_y = gl_oy - fh * text_zoom * 3;
+	size_t visible_rows = (size_t)((overlay_h - fh * text_zoom * 3) / (fh * text_zoom));
 	if (visible_rows < 2)
 		visible_rows = 2;
 	if (visible_rows > NUM_OPTIONS)
@@ -278,7 +250,6 @@ GLUI_DrawOptionsEditor(GLWindow_State* wdw)
 
 		/* Current value — read from GLWindow_State for immediate feedback */
 		if (is_selected) {
-			int val_x = ox + fw * text_zoom + 30 * fw * text_zoom;
 			char val_str[64];
 			EditTarget et = get_edit_target(wdw, idx);
 			if (idx < 3)
@@ -286,13 +257,17 @@ GLUI_DrawOptionsEditor(GLWindow_State* wdw)
 			else
 				snprintf(val_str, sizeof(val_str), "%.1f", *et.ptr);
 
+			/* Right-align value within overlay */
+			int val_pixel_w = (int)strlen(val_str) * fw * text_zoom;
+			int val_x = ox + overlay_w - fw * text_zoom * 2 - val_pixel_w;
+
 			Font_DrawString(wdw, "\\dddd00ff", val_x, y, text_zoom);
-			Font_DrawString(wdw, val_str, val_x + (int)strlen(val_str) * fw * text_zoom, y, text_zoom);
+			Font_DrawString(wdw, val_str, val_x, y, text_zoom);
 		}
 	}
 
 	/* Footer: instructions — at bottom of overlay */
-	int footer_y = gl_oy - overlay_h;
+	int footer_y = gl_oy - overlay_h + fh * text_zoom;
 	Font_DrawString(wdw, "\\777777ffEsc:close", ox + fw * text_zoom, footer_y, text_zoom);
 }
 
@@ -304,8 +279,6 @@ GLWindow_OptionsEditor_HandleKey(GLWindow_State* wdw, SDL_Keysym* keysym)
 		return;
 
 	if (keysym->sym == SDLK_ESCAPE) {
-		/* Persist changes to opts before closing */
-		GLWindow_OptionsEditor_Persist(wdw);
 		ed->active = false;
 		return;
 	}
@@ -371,6 +344,11 @@ Vis_Init(size_t wdw_width, size_t wdw_height, size_t nsamples, size_t nstars)
 
 	v->result = (fftwf_complex*) calloc(v->fft_len, sizeof(fftwf_complex));
 	assert(v->result);
+
+	/* Circular FFT linearized spectrum buffer */
+	v->lin_cap = v->fft_len / 2;
+	v->lin = (float*)calloc(v->lin_cap, sizeof(float));
+	assert(v->lin);
 
 	/* Blackman-Nuttall window (B=1.9761), ~100dB sidelobe attenuation
 	 * from Wikipedia */
@@ -577,6 +555,7 @@ Vis_Destroy(Vis_State* v)
 	free(v->result);
 	free(v->stars);
 	free(v->wf_buf);
+	free(v->lin);
 	glDeleteTextures(1, &v->wf_tex);
 	free(v);
 }
@@ -806,6 +785,13 @@ draw_circular_fft(GLWindow_State* wdw)
 	Vis_State* v = wdw->v;
 	size_t n_bars = v->fft_len / 2 - 2;  /* use positive half of FFT */
 
+	/* Reallocate if window was resized */
+	if (n_bars > v->lin_cap) {
+		v->lin = (float*)realloc(v->lin, n_bars * sizeof(float));
+		assert(v->lin);
+		v->lin_cap = n_bars;
+	}
+
 	/* Center and radii */
 	float cx = (float)wdw->width / 2.f;
 	float cy = (float)wdw->height / 2.f;
@@ -813,15 +799,14 @@ draw_circular_fft(GLWindow_State* wdw)
 	float outer_r = fminf(wdw->width, wdw->height) * 0.9f;
 
 	/* Linearize spectrum: convert log10 → linear energy in one pass */
-	float* lin = (float*) alloca(n_bars * sizeof(float));
 	for (size_t i = 0; i < n_bars; i++)
-		lin[i] = powf(10.f, v->spectrum[i]);
+		v->lin[i] = powf(10.f, v->spectrum[i]);
 
 	/* Normalize scale: find max energy in positive half */
 	float max_energy = 0;
 	for (size_t i = 0; i < n_bars; i++)
-		if (lin[i] > max_energy)
-			max_energy = lin[i];
+		if (v->lin[i] > max_energy)
+			max_energy = v->lin[i];
 	if (max_energy <= 0) max_energy = 1;
 
 	float bar_scale = outer_r - inner_r;
@@ -835,14 +820,14 @@ draw_circular_fft(GLWindow_State* wdw)
 	float angle_step = 2.f * M_PI / (float)seg;
 
 	/* Draw strands radiating from center — thin lines from origin outward
-	 * drawn backwards so lin[0] is on top at the center overlap */
+	 * drawn backwards so v->lin[0] is on top at the center overlap */
 	glDisable(GL_DEPTH_TEST);
 	glLineWidth(8.0f);
 	glBegin(GL_LINES);
 	unsigned char r = 0, g = 0, b = 0;
 	for (ssize_t i = (ssize_t)n_bars - 1; i >= 0; i--) {
 		float angle = (float)i * angle_step + M_PI;
-		float spec = sqrtf(lin[i] / max_energy);
+		float spec = sqrtf(v->lin[i] / max_energy);
 		float bar_len = inner_r * 0.3f + spec * bar_scale;
 
 		/* Color by energy: low→high maps to cool→hot (blue → cyan → green → yellow → white) */
@@ -953,7 +938,7 @@ GLUI_DrawVis(GLWindow_State* wdw)
 		glColor4ub(255, 255, 255, 255);
 
 		float energy_factor = v->mean_energy_band_div16 / INT16_MAX_F;
-		float perturb = wdw->perturb_waterfall_factor;
+		float perturb = wdw->opts->ui.perturb_waterfall_factor;
 
 		int status_h = wdw->font->font_height * 3;
 		/* Waterfall spans from status bar bottom to song info top */
@@ -1225,12 +1210,12 @@ GLUI_Draw(GLWindow_State* wdw)
 	GLUI_DrawOptionsEditor(wdw);
 
 	/* Background color: blend base with reactive spectral color + energy flash */
-	float boost = wdw->v->mean_energy_band_div16 / MAX_ENERGY * wdw->bg_flash_factor;
+	float boost = wdw->v->mean_energy_band_div16 / MAX_ENERGY * wdw->opts->ui.bg_flash_factor;
 	boost *= boost;
 
-	float r = wdw->clrcolor[0] + wdw->v->reactive_color[0] * REACTIVE_BLEND + boost;
-	float g = wdw->clrcolor[1] + wdw->v->reactive_color[1] * REACTIVE_BLEND + boost;
-	float b = wdw->clrcolor[2] + wdw->v->reactive_color[2] * REACTIVE_BLEND + boost;
+	float r = wdw->opts->ui.clr[0] + wdw->v->reactive_color[0] * REACTIVE_BLEND + boost;
+	float g = wdw->opts->ui.clr[1] + wdw->v->reactive_color[1] * REACTIVE_BLEND + boost;
+	float b = wdw->opts->ui.clr[2] + wdw->v->reactive_color[2] * REACTIVE_BLEND + boost;
 	glClearColor(r, g, b, 0.f);
 
 	/* Draw browser list (zoom=2) */
@@ -1320,19 +1305,15 @@ GLWindow_HandleKeyDown(GLWindow_State* wdw, SDL_Keysym* keysym)
 			GLWindow_HandleFKey(wdw, keysym->sym - SDLK_F1 + 1);
 			break;
 		case SDLK_F6:
-			wdw->clrcolor[0] = (float)rand() / RAND_MAX * 255.f;
-			wdw->clrcolor[1] = (float)rand() / RAND_MAX * 255.f;
-			wdw->clrcolor[2] = (float)rand() / RAND_MAX * 255.f;
+			wdw->opts->ui.clr[0] = (float)rand() / RAND_MAX;
+			wdw->opts->ui.clr[1] = (float)rand() / RAND_MAX;
+			wdw->opts->ui.clr[2] = (float)rand() / RAND_MAX;
 			break;
 		case SDLK_o:
 			if (wdw->editor) {
 				if (wdw->editor->active) {
-					/* Close editor — persist changes to opts */
-					GLWindow_OptionsEditor_Persist(wdw);
 					wdw->editor->active = false;
 				} else {
-					/* Open editor — load current opts into window fields */
-					GLWindow_OptionsEditor_Load(wdw);
 					wdw->editor->selected = 0;
 					wdw->editor->scroll = 0;
 					wdw->editor->active = true;
@@ -1503,15 +1484,6 @@ GLWindow_Init(Options* opt, Player_State* ps)
 	gl_wdw->width = opt->wdw_width;
 	gl_wdw->height = opt->wdw_height;
 	gl_wdw->fps_limit = opt->fps_limit;
-	gl_wdw->font_shake_factor = opt->font_shake_factor;
-	gl_wdw->font_zoom_factor = opt->font_zoom_factor;
-	gl_wdw->font_rotation_factor = opt->font_rotation_factor;
-	gl_wdw->bg_flash_factor = opt->bg_flash_factor;
-	gl_wdw->perturb_waterfall_factor = opt->perturb_waterfall_factor;
-
-	gl_wdw->clrcolor[0] = opt->clr_r;
-	gl_wdw->clrcolor[1] = opt->clr_g;
-	gl_wdw->clrcolor[2] = opt->clr_b;
 
 	SDL_GL_SetAttribute(SDL_GL_RED_SIZE, 5);
 	SDL_GL_SetAttribute(SDL_GL_GREEN_SIZE, 5);
@@ -1531,7 +1503,7 @@ GLWindow_Init(Options* opt, Player_State* ps)
 
 	GL_Init(gl_wdw->width,
 	        gl_wdw->height,
-	        gl_wdw->clrcolor[0], gl_wdw->clrcolor[1], gl_wdw->clrcolor[2]);
+	        opt->ui.clr[0], opt->ui.clr[1], opt->ui.clr[2]);
 
 	gl_wdw->sdl_wdw = sdl_wdw;
 
