@@ -401,6 +401,9 @@ Vis_Init(size_t wdw_width, size_t wdw_height, size_t nsamples, size_t nstars)
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP);
 	glBindTexture(GL_TEXTURE_2D, 0);
 
+	v->circ_rotation = 0.f;
+	v->circ_prev_energy = 0.f;
+
 	return v;
 }
 
@@ -814,6 +817,17 @@ draw_circular_fft(GLWindow_State* wdw)
 	float bar_scale = outer_r - inner_r;
 	float base_r = 0.f;
 
+	/* Energy pulse: scale entire circle by audio energy so it throbs with the beat */
+	float energy_norm = v->mean_energy_band_div16 / MAX_ENERGY;
+	float pulse = 1.f + energy_norm * 8.f;
+	bar_scale *= pulse;
+
+	/* Rotation driven by energy change — forward on attack, backward on decay,
+	 * still when energy is steady. The delta multiplier amplifies reactivity. */
+	float energy_delta = energy_norm - v->circ_prev_energy;
+	v->circ_prev_energy = energy_norm;
+	v->circ_rotation += energy_delta * 5.f;
+
 	GL_OrthoOn(wdw->width, wdw->height);
 	glDisable(GL_TEXTURE_2D);
 	glEnable(GL_BLEND);
@@ -832,13 +846,13 @@ draw_circular_fft(GLWindow_State* wdw)
 	for (size_t i = 0; i < n_bars; i++) {
 		size_t next = (i + 1) % n_bars;
 
-		float a0 = (float)i * angle_step + M_PI;
-		float a1 = (float)next * angle_step + M_PI;
+		float a0 = (float)i * angle_step + M_PI + v->circ_rotation;
+		float a1 = (float)next * angle_step + M_PI + v->circ_rotation;
 
-		/* Linear suppression ramp for the lowest 5 FFT bins.
-		 * DC (bin 0) at 20%, bin 4 at 100%, bins 5+ unscaled. */
-		float freq_scale0 = i < 5 ? 0.2f + 0.8f * (float)i / 4.f : 1.f;
-		float freq_scale1 = next < 5 ? 0.2f + 0.8f * (float)next / 4.f : 1.f;
+		/* Linear suppression ramp for the lowest 10 FFT bins.
+		 * DC (bin 0) at 5%, bin 9 at 100%, bins 10+ unscaled. */
+		float freq_scale0 = i < 10 ? 0.05f + 0.95f * (float)i / 9.f : 1.f;
+		float freq_scale1 = next < 10 ? 0.05f + 0.95f * (float)next / 9.f : 1.f;
 
 		float spec0 = sqrtf(v->lin[i] / max_energy) * freq_scale0;
 		float spec1 = sqrtf(v->lin[next] / max_energy) * freq_scale1;

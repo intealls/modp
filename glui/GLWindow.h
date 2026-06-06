@@ -80,6 +80,8 @@ struct Vis_State {
 	/* Circular FFT linearized spectrum buffer (heap-allocated, reused each frame) */
 	float* lin;
 	size_t lin_cap;
+	float circ_rotation;
+	float circ_prev_energy;
 };
 
 typedef enum Vis { VIS_FFT = 0, VIS_SCOPE = 1, VIS_WATERFALL = 2, VIS_CIRCULAR = 3,
