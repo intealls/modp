@@ -92,7 +92,7 @@ struct OptionsEditor {
 	size_t scroll;            /* Scroll offset for the list */
 };
 
-/* ── Options list (7 entries) ────────────────────────────────────────── */
+/* ── Options list (8 entries) ───────────────────────────────────────── */
 
 static OptionEntry option_list[] = {
 	/* Background color */
@@ -107,6 +107,7 @@ static OptionEntry option_list[] = {
 
 	/* Visualization effects */
 	{ "Perturb Factor",   "Spectrogram perturbation", 0.0f, 100.0f },
+	{ "BG Flash Factor",  "Background flash on energy", 0.0f, 100.0f },
 };
 
 #define NUM_OPTIONS (sizeof(option_list) / sizeof(option_list[0]))
@@ -133,6 +134,7 @@ get_edit_target(GLWindow_State* wdw, size_t idx)
 		case 4: et.ptr = &wdw->opts->ui.font_zoom_factor; break;
 		case 5: et.ptr = &wdw->opts->ui.font_rotation_factor; break;
 		case 6: et.ptr = &wdw->opts->ui.perturb_waterfall_factor; break;
+		case 7: et.ptr = &wdw->opts->ui.bg_flash_factor; break;
 	}
 	return et;
 }
@@ -181,7 +183,7 @@ GLUI_DrawOptionsEditor(GLWindow_State* wdw)
 	/* Overlay dimensions — fit to actual option count */
 	int overlay_w = 72 * fw * text_zoom;
 	int overlay_h = (NUM_OPTIONS + 3) * fh * text_zoom;  /* title + separator + options + footer */
-	int ox = (int)wdw->width / 2 - overlay_w / 2;
+	int ox = (int)((float)wdw->width * 0.2f) - overlay_w / 2;
 	int oy = (int)wdw->height / 2 - overlay_h / 2;
 
 	/* Clamp if overlay is larger than window */
@@ -947,9 +949,10 @@ GLUI_DrawVis(GLWindow_State* wdw)
 		int wf_h = wf_y1 - wf_y0;  /* waterfall height (y-dimension) */
 
 		/* Pixel-grid rendering: split waterfall into independently perturbed blocks
+		 * Float-based cell sizing prevents integer truncation gaps at edges.
 		 * More blocks + higher perturb = heavier pixel chaos */
-		int cell_w = wdw->width / WF_COLS;
-		int cell_h = wf_h / WF_ROWS;
+		float cell_w_f = (float)wdw->width / WF_COLS;
+		float cell_h_f = (float)wf_h / WF_ROWS;
 
 		/* Find max log-spectrum for normalization (spectrum is log10, not linear) */
 		float max_spec = 0;
@@ -978,11 +981,11 @@ GLUI_DrawVis(GLWindow_State* wdw)
 					float dy = ((((float)rand() / RAND_MAX) - 0.5f) * 2.f * energy) * perturb;
 					float ds = (((float)rand() / RAND_MAX) * energy) * perturb * WF_DS_SCALE;
 
-					/* Cell screen coordinates with jitter */
-					int cx0 = c * cell_w + (int)dx;
-					int cy0 = wf_y0 + r * cell_h + (int)dy;
-					int cx1 = (c + 1) * cell_w + (int)dx;
-					int cy1 = wf_y0 + (r + 1) * cell_h + (int)dy;
+					/* Cell screen coordinates with jitter (float throughout — no integer truncation) */
+					float cx0 = c * cell_w_f + dx;
+					float cy0 = (float)wf_y0 + r * cell_h_f + dy;
+					float cx1 = (c + 1) * cell_w_f + dx;
+					float cy1 = (float)wf_y0 + (r + 1) * cell_h_f + dy;
 
 					/* Texture coordinates with jitter */
 					float tx0 = nx;
