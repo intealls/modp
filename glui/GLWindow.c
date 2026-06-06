@@ -812,25 +812,41 @@ draw_circular_fft(GLWindow_State* wdw)
 	if (max_energy <= 0) max_energy = 1;
 
 	float bar_scale = outer_r - inner_r;
+	float base_r = 0.f;
 
 	GL_OrthoOn(wdw->width, wdw->height);
 	glDisable(GL_TEXTURE_2D);
 	glEnable(GL_BLEND);
 	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+	glDisable(GL_DEPTH_TEST);
 
 	size_t seg = n_bars > 0 ? n_bars : 1;
 	float angle_step = 2.f * M_PI / (float)seg;
 
-	/* Draw strands radiating from center — thin lines from origin outward
-	 * drawn backwards so v->lin[0] is on top at the center overlap */
-	glDisable(GL_DEPTH_TEST);
-	glLineWidth(8.0f);
-	glBegin(GL_LINES);
-	unsigned char r = 0, g = 0, b = 0;
-	for (ssize_t i = (ssize_t)n_bars - 1; i >= 0; i--) {
-		float angle = (float)i * angle_step + M_PI;
-		float spec = sqrtf(v->lin[i] / max_energy);
-		float bar_len = inner_r * 0.3f + spec * bar_scale;
+	/* Draw bars as solid triangles forming a filled circle.
+	 * Each bar is a pair of triangles (a quad wedge) between bin[i] and bin[i+1],
+	 * from the center outward to the energy-scaled height.
+	 * This eliminates the wedge-shaped gaps between adjacent line strands and
+	 * the empty hole at the center. */
+	glBegin(GL_TRIANGLES);
+	for (size_t i = 0; i < n_bars; i++) {
+		size_t next = (i + 1) % n_bars;
+
+		float a0 = (float)i * angle_step + M_PI;
+		float a1 = (float)next * angle_step + M_PI;
+
+		/* Linear suppression ramp for the lowest 5 FFT bins.
+		 * DC (bin 0) at 20%, bin 4 at 100%, bins 5+ unscaled. */
+		float freq_scale0 = i < 5 ? 0.2f + 0.8f * (float)i / 4.f : 1.f;
+		float freq_scale1 = next < 5 ? 0.2f + 0.8f * (float)next / 4.f : 1.f;
+
+		float spec0 = sqrtf(v->lin[i] / max_energy) * freq_scale0;
+		float spec1 = sqrtf(v->lin[next] / max_energy) * freq_scale1;
+
+		/* Color by average energy of this bar edge */
+		float spec = (spec0 + spec1) * 0.5f;
+
+		unsigned char r, g, b;
 
 		/* Color by energy: low→high maps to cool→hot (blue → cyan → green → yellow → white) */
 		if (spec < 0.25f) {
@@ -857,11 +873,28 @@ draw_circular_fft(GLWindow_State* wdw)
 
 		glColor4ub(r, g, b, 220);
 
-		float ox = cx + bar_len * cosf(angle);
-		float oy = cy + bar_len * sinf(angle);
+		/* Inner (base) and outer (energy-scaled) endpoints for this bar's edges */
+		float r0 = base_r + spec0 * bar_scale;
+		float r1 = base_r + spec1 * bar_scale;
 
-		glVertex2f(cx, cy);
-		glVertex2f(ox, oy);
+		float ix0 = cx + base_r * cosf(a0);
+		float iy0 = cy + base_r * sinf(a0);
+		float ix1 = cx + base_r * cosf(a1);
+		float iy1 = cy + base_r * sinf(a1);
+		float ox0 = cx + r0 * cosf(a0);
+		float oy0 = cy + r0 * sinf(a0);
+		float ox1 = cx + r1 * cosf(a1);
+		float oy1 = cy + r1 * sinf(a1);
+
+		/* Triangle 1: (inner0, inner1, outer0) */
+		glVertex2f(ix0, iy0);
+		glVertex2f(ix1, iy1);
+		glVertex2f(ox0, oy0);
+
+		/* Triangle 2: (inner1, outer1, outer0) */
+		glVertex2f(ix1, iy1);
+		glVertex2f(ox1, oy1);
+		glVertex2f(ox0, oy0);
 	}
 	glEnd();
 
