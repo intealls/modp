@@ -212,6 +212,15 @@ main(int argc, char* argv[])
 	       .min.f = 0.f,
 	       .max.f = 100.f,
 	       .dest = &o.ui.circ_spin_factor },
+	       { .long_name = "trail_factor",
+	       .description = "Reverb trail persistence (0-0.3)",
+	       .type = OPT_FLOAT,
+	       .has_arg = true,
+	       .in_cfg_file = true,
+	       .initial.f = 0.f,
+	       .min.f = 0.f,
+	       .max.f = 0.3f,
+	       .dest = &o.ui.trail_factor },
 	       { .long_name = "help",
 	       .description = "Display help",
 	       .type = OPT_NULL,
@@ -237,7 +246,6 @@ main(int argc, char* argv[])
 
 		running = GLWindow_ProcessEvents(wdw, &got_input);
 		Player_UpdateAutoInc(wdw->ps, got_input);
-		GL_Clear();
 		GLUI_Draw(wdw);
 		SDL_GL_SwapWindow(wdw->sdl_wdw);
 

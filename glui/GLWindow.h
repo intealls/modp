@@ -26,6 +26,7 @@ typedef struct UiCfg {
 	float perturb_waterfall_factor; /* Spectrogram perturbation */
 	float circ_pulse_factor;    /* Circular vis energy pulse amount */
 	float circ_spin_factor;     /* Circular vis rotation reactivity */
+	float trail_factor;         /* Reverb trail persistence (0 = off, 1 = full) */
 } UiCfg;
 
 typedef struct Options {

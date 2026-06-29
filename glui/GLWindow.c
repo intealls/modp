@@ -112,6 +112,7 @@ static OptionEntry option_list[] = {
 	/* Circular vis effects */
 	{ "Circ Pulse",       "Circle expands with energy", 0.0f, 100.0f },
 	{ "Circ Spin",        "Circle spin reactivity", 0.0f, 100.0f },
+	{ "Trail Factor",     "Reverb trail persistence", 0.0f, 0.3f },
 };
 
 #define NUM_OPTIONS (sizeof(option_list) / sizeof(option_list[0]))
@@ -141,6 +142,7 @@ get_edit_target(GLWindow_State* wdw, size_t idx)
 		case 7: et.ptr = &wdw->opts->ui.bg_flash_factor; break;
 		case 8: et.ptr = &wdw->opts->ui.circ_pulse_factor; break;
 		case 9: et.ptr = &wdw->opts->ui.circ_spin_factor; break;
+		case 10: et.ptr = &wdw->opts->ui.trail_factor; break;
 	}
 	return et;
 }
@@ -1258,6 +1260,34 @@ GLUI_DrawSongTime(GLWindow_State* wdw, int y, int zoom)
 void
 GLUI_Draw(GLWindow_State* wdw)
 {
+	/* Either clear the framebuffer or fade it for the reverb trail effect.
+	 * When trail is active, we skip clearing so the previous frame persists
+	 * and gets darkened by the trail quad below. */
+	if (wdw->opts->ui.trail_factor > 0.f) {
+		glEnable(GL_BLEND);
+		glBlendFunc(GL_ZERO, GL_ONE_MINUS_SRC_ALPHA);
+		glColor4f(0.f, 0.f, 0.f, wdw->opts->ui.trail_factor);
+		GL_OrthoOn(wdw->width, wdw->height);
+		glBegin(GL_QUADS);
+		{
+			glVertex2i(0, 0);
+			glVertex2i(wdw->width, 0);
+			glVertex2i(wdw->width, wdw->height);
+			glVertex2i(0, wdw->height);
+		}
+		glEnd();
+		GL_OrthoOff();
+		glEnable(GL_BLEND);
+		glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+		glColor4f(1.f, 1.f, 1.f, 1.f);
+	}
+	else {
+		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+	}
+
+	glMatrixMode(GL_MODELVIEW);
+	glLoadIdentity();
+
 	Vis_Update(wdw);
 	GLUI_DrawVis(wdw);
 
