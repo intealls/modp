@@ -108,6 +108,10 @@ static OptionEntry option_list[] = {
 	/* Visualization effects */
 	{ "Perturb Factor",   "Spectrogram perturbation", 0.0f, 100.0f },
 	{ "BG Flash Factor",  "Background flash on energy", 0.0f, 100.0f },
+
+	/* Circular vis effects */
+	{ "Circ Pulse",       "Circle expands with energy", 0.0f, 100.0f },
+	{ "Circ Spin",        "Circle spin reactivity", 0.0f, 100.0f },
 };
 
 #define NUM_OPTIONS (sizeof(option_list) / sizeof(option_list[0]))
@@ -135,6 +139,8 @@ get_edit_target(GLWindow_State* wdw, size_t idx)
 		case 5: et.ptr = &wdw->opts->ui.font_rotation_factor; break;
 		case 6: et.ptr = &wdw->opts->ui.perturb_waterfall_factor; break;
 		case 7: et.ptr = &wdw->opts->ui.bg_flash_factor; break;
+		case 8: et.ptr = &wdw->opts->ui.circ_pulse_factor; break;
+		case 9: et.ptr = &wdw->opts->ui.circ_spin_factor; break;
 	}
 	return et;
 }
@@ -819,14 +825,14 @@ draw_circular_fft(GLWindow_State* wdw)
 
 	/* Energy pulse: scale entire circle by audio energy so it throbs with the beat */
 	float energy_norm = v->mean_energy_band_div16 / MAX_ENERGY;
-	float pulse = 1.f + energy_norm * 8.f;
+	float pulse = 1.f + energy_norm * wdw->opts->ui.circ_pulse_factor;
 	bar_scale *= pulse;
 
 	/* Rotation driven by energy change — forward on attack, backward on decay,
-	 * still when energy is steady. The delta multiplier amplifies reactivity. */
+	 * still when energy is steady. */
 	float energy_delta = energy_norm - v->circ_prev_energy;
 	v->circ_prev_energy = energy_norm;
-	v->circ_rotation += energy_delta * 5.f;
+	v->circ_rotation += energy_delta * wdw->opts->ui.circ_spin_factor;
 
 	GL_OrthoOn(wdw->width, wdw->height);
 	glDisable(GL_TEXTURE_2D);
@@ -1023,10 +1029,12 @@ GLUI_DrawVis(GLWindow_State* wdw)
 					/* Combine global energy with local spectral energy */
 					float energy = (energy_factor + spec_norm) * 0.5f;
 
-					/* Per-cell random perturbation scaled by energy and factor */
-					float dx = ((((float)rand() / RAND_MAX) - 0.5f) * 2.f * energy) * perturb;
-					float dy = ((((float)rand() / RAND_MAX) - 0.5f) * 2.f * energy) * perturb;
-					float ds = (((float)rand() / RAND_MAX) * energy) * perturb * WF_DS_SCALE;
+					/* Per-cell random perturbation uses the square of the applied effect. */
+					float jitter = energy * perturb;
+					jitter *= jitter;
+					float dx = ((((float)rand() / RAND_MAX) - 0.5f) * 2.f * jitter);
+					float dy = ((((float)rand() / RAND_MAX) - 0.5f) * 2.f * jitter);
+					float ds = (((float)rand() / RAND_MAX) * jitter) * WF_DS_SCALE;
 
 					/* Cell screen coordinates with jitter (float throughout — no integer truncation) */
 					float cx0 = c * cell_w_f + dx;

@@ -24,6 +24,8 @@ typedef struct UiCfg {
 	float font_rotation_factor; /* Text rotation synced to music */
 	float bg_flash_factor;      /* Background energy flash */
 	float perturb_waterfall_factor; /* Spectrogram perturbation */
+	float circ_pulse_factor;    /* Circular vis energy pulse amount */
+	float circ_spin_factor;     /* Circular vis rotation reactivity */
 } UiCfg;
 
 typedef struct Options {
