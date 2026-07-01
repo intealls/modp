@@ -32,8 +32,71 @@
 #define VIS_COLOR_PAIRS_RANDOM 14  // Color pairs 14-19: random colors for scope visualization
 #define VIS_NUM_RANDOM_COLORS 6
 
+// FFT visualization constants
+#define FFT_SCALE_FACTOR 6.0f
+#define FFT_BAR_COUNT 9
+#define FFT_ENERGY_NORMALIZE 6.0f
+
+// Scope visualization constants
+#define SCOPE_HEADROOM_FACTOR 0.80f
+
 // Vertical bar characters - index 0 is thickest (bottom), index 8 is lightest (top)
 static const char fft_chars[] = { '#', '@', '+', '=', '-', '.', ',', ':', ' ' };
+
+// Initialize color pairs and assign to state
+static void
+InitColorPairs(NcursesWindow_State* wdw)
+{
+	if (has_colors()) {
+		start_color();
+		use_default_colors();
+
+		// Color pairs
+		init_pair(1, COLOR_BLUE, -1);     // Directories (bold)
+		init_pair(2, COLOR_WHITE, -1);    // Files
+		init_pair(3, COLOR_BLACK, COLOR_WHITE);  // Status bar (inverted)
+		init_pair(4, COLOR_YELLOW, -1);   // Song title
+		init_pair(5, COLOR_GREEN, -1);    // Time display
+		init_pair(6, COLOR_BLUE, -1);     // FFT: low energy (blue)
+		init_pair(7, COLOR_CYAN, -1);     // FFT: medium-low energy
+		init_pair(8, COLOR_YELLOW, -1);   // FFT: medium-high energy
+		init_pair(9, COLOR_RED, -1);       // FFT: high energy (red)
+		// Status bar colors on inverted background
+		init_pair(10, COLOR_GREEN, COLOR_WHITE);  // "on" state (green on white)
+		init_pair(11, COLOR_RED, COLOR_WHITE);   // "off" state (red on white)
+		init_pair(12, COLOR_GREEN, COLOR_WHITE); // Numeric values (green on white)
+		init_pair(13, COLOR_YELLOW, COLOR_BLACK); // Vis mode (yellow on black, stands out)
+		// Scope visualization random colors
+		init_pair(14, COLOR_MAGENTA, -1);  // Random color 1
+		init_pair(15, COLOR_CYAN, -1);     // Random color 2
+		init_pair(16, COLOR_GREEN, -1);    // Random color 3
+		init_pair(17, COLOR_WHITE, -1);    // Random color 4
+		init_pair(18, COLOR_YELLOW, -1);   // Random color 5
+		init_pair(19, COLOR_BLUE, -1);     // Random color 6
+
+		wdw->color_dir = COLOR_PAIR(1);
+		wdw->color_file = COLOR_PAIR(2);
+		wdw->color_status = COLOR_PAIR(3);
+		wdw->color_title = COLOR_PAIR(4);
+		wdw->color_time = COLOR_PAIR(5);
+		wdw->color_status_on = COLOR_PAIR(10);    // Green on white
+		wdw->color_status_off = COLOR_PAIR(11);   // Red on white
+		wdw->color_status_value = COLOR_PAIR(12); // Green on white
+		wdw->color_status_vis = COLOR_PAIR(13);   // Yellow (bold will be added)
+	} else {
+		// Fallback for colorless terminals
+		wdw->color_dir = A_BOLD;
+		wdw->color_file = A_NORMAL;
+		wdw->color_status = A_REVERSE;
+		wdw->color_title = A_BOLD;
+		wdw->color_time = A_NORMAL;
+		// Status bar fallback
+		wdw->color_status_on = A_BOLD;     // Bold for "on"
+		wdw->color_status_off = A_NORMAL;  // Normal for "off"
+		wdw->color_status_value = A_BOLD;  // Bold for values
+		wdw->color_status_vis = A_BOLD;     // Bold for vis mode
+	}
+}
 
 // Helper function for summing stereo samples
 static inline float
@@ -81,32 +144,32 @@ static void Vis_Destroy(Vis_State* v);
 static Vis_State*
 Vis_Init(size_t wdw_width, size_t nsamples)
 {
-	Vis_State* v = calloc(1, sizeof(Vis_State));
+	Vis_State* v = calloc(1, sizeof(*v));
 	if (!v) return NULL;
 
 	v->fft_len = wdw_width;
 	v->nsamples = nsamples;
 	v->vis_len = wdw_width * 2;
 
-	v->vis_buf = calloc(v->vis_len, sizeof(T));
+	v->vis_buf = calloc(v->vis_len, sizeof(*v->vis_buf));
 	if (!v->vis_buf) goto fail;
-	v->window = calloc(v->fft_len, sizeof(float));
+	v->window = calloc(v->fft_len, sizeof(*v->window));
 	if (!v->window) goto fail;
-	v->signal = calloc(v->fft_len, sizeof(float));
+	v->signal = calloc(v->fft_len, sizeof(*v->signal));
 	if (!v->signal) goto fail;
-	v->spectrum = calloc(v->fft_len, sizeof(float));
+	v->spectrum = calloc(v->fft_len, sizeof(*v->spectrum));
 	if (!v->spectrum) goto fail;
-	v->result = calloc(v->fft_len, sizeof(fftwf_complex));
+	v->result = calloc(v->fft_len, sizeof(*v->result));
 	if (!v->result) goto fail;
 
 	// Reusable buffers to avoid per-frame allocation
-	v->flush_buf = malloc(v->vis_len * sizeof(T));
+	v->flush_buf = malloc(v->vis_len * sizeof(*v->flush_buf));
 	if (!v->flush_buf) goto fail;
 
 	// Scope visualization buffers (will be reallocated if terminal widens)
-	v->scope_yrow = malloc(wdw_width * sizeof(int));
+	v->scope_yrow = malloc(wdw_width * sizeof(*v->scope_yrow));
 	if (!v->scope_yrow) goto fail;
-	v->scope_colors = malloc(wdw_width * sizeof(int));
+	v->scope_colors = malloc(wdw_width * sizeof(*v->scope_colors));
 	if (!v->scope_colors) goto fail;
 	v->scope_w = wdw_width;
 
@@ -151,6 +214,12 @@ Vis_Destroy(Vis_State* v)
 }
 
 static void
+Vis_Cleanup(void)
+{
+	fftwf_cleanup();
+}
+
+static void
 Vis_Update(NcursesWindow_State* wdw)
 {
 	Vis_State* v = wdw->v;
@@ -180,7 +249,7 @@ Vis_Update(NcursesWindow_State* wdw)
 			memset(v->vis_buf + filled, 0, (v->vis_len - filled) * sizeof(T));
 		}
 
-		size_t n = v->nsamples * 2 < v->vis_len ? v->nsamples : v->vis_len / 2;
+		size_t n = 2 * v->nsamples < v->vis_len ? v->nsamples : v->vis_len / 2;
 		if (n > v->fft_len) n = v->fft_len;
 		for (size_t i = 0; i < v->fft_len; i++) {
 			v->signal[i] = 0.0f;
@@ -225,13 +294,12 @@ static void
 DrawFftVisualization(NcursesWindow_State* wdw)
 {
 	Vis_State* v = wdw->v;
-	const int bar_count = 9;
 
 	if (!wdw || !v || wdw->width <= 0 || v->fft_len <= 0) {
 		return;
 	}
 
-	float scale = (float)wdw->vis_height / 6.0f;
+	float scale = (float)wdw->vis_height / FFT_SCALE_FACTOR;
 	int hminus1 = wdw->vis_height - 1;
 	size_t half_bins = v->fft_len / 2;
 	if (half_bins <= 0) half_bins = 1;
@@ -243,15 +311,15 @@ DrawFftVisualization(NcursesWindow_State* wdw)
 
 		float energy = v->spectrum[idx];
 		int bar_height = clamp_int((int)(energy * scale), 0, hminus1);
-		float normalized_energy = fminf(energy / 6.0f, 1.0f);
+		float normalized_energy = fminf(energy / FFT_ENERGY_NORMALIZE, 1.0f);
 
 		for (int row = wdw->vis_height - 1; row >= wdw->vis_height - bar_height; row--) {
 			int pos_in_bar = hminus1 - row;
 			float t = (hminus1 > 0) ? (float)pos_in_bar / hminus1 : 0.0f;
 
 			int bar_idx = clamp_int(
-				(int)((normalized_energy - t * 0.3f) * (bar_count - 1)),
-				0, bar_count - 1);
+				(int)((normalized_energy - t * 0.3f) * (FFT_BAR_COUNT - 1)),
+				0, FFT_BAR_COUNT - 1);
 
 			move(row, col);
 			attron(A_BOLD | COLOR_PAIR(vis_energy_to_color(t)));
@@ -280,9 +348,10 @@ DrawScopeVisualization(NcursesWindow_State* wdw)
 
 	// Grow persistent buffers if the terminal got wider
 	if ((size_t)w > v->scope_w) {
-		int* new_yrow = realloc(v->scope_yrow, w * sizeof(int));
-		int* new_colors = realloc(v->scope_colors, w * sizeof(int));
+		int* new_yrow = realloc(v->scope_yrow, w * sizeof(*new_yrow));
+		int* new_colors = realloc(v->scope_colors, w * sizeof(*new_colors));
 		if (!new_yrow || !new_colors) {
+			free(new_yrow);
 			clear_visualization_area(wdw);
 			return;
 		}
@@ -294,11 +363,6 @@ DrawScopeVisualization(NcursesWindow_State* wdw)
 	int *col_colors = v->scope_colors;
 
 	// Generate random color assignments for each column
-	static bool seeded = false;
-	if (!seeded) {
-		srand((unsigned int)(time(NULL) ^ (unsigned long)wdw));
-		seeded = true;
-	}
 	for (int col = 0; col < w; col++) {
 		col_colors[col] = VIS_COLOR_PAIRS_RANDOM + (rand() % VIS_NUM_RANDOM_COLORS);
 	}
@@ -313,8 +377,8 @@ DrawScopeVisualization(NcursesWindow_State* wdw)
 		}
 	}
 
-	// Keep 80% of headroom for better visualization range
-	float headroom = (float)mid * 0.80f;
+	// Keep headroom for better visualization range
+	float headroom = (float)mid * SCOPE_HEADROOM_FACTOR;
 	float gain = (peak > headroom) ? (headroom / peak) : 1.0f;
 
 	int valid = 0;
@@ -710,14 +774,26 @@ NcursesWindow_ProcessEvents(NcursesWindow_State* wdw, bool* got_input)
 		if (ch == KEY_RESIZE) {
 			// Store old vis state
 			Vis_State* old_v = wdw->v;
+			int old_width = wdw->width;
+			int old_height = wdw->height;
 
 			// Recalculate layout first
 			NcursesWindow_RecalcLayout(wdw);
+
+			// Validate terminal size after resize
+			if (wdw->width < MIN_TERMINAL_WIDTH || wdw->height < MIN_TERMINAL_HEIGHT) {
+				// Terminal too small, restore old state
+				wdw->width = old_width;
+				wdw->height = old_height;
+				return true;
+			}
 
 			// Create new vis state with new width
 			wdw->v = Vis_Init(wdw->width, NCURSES_VIS_NSAMPLES);
 			if (!wdw->v) {
 				wdw->v = old_v;
+				wdw->width = old_width;
+				wdw->height = old_height;
 				return true;
 			}
 
@@ -744,6 +820,8 @@ NcursesWindow_Destroy(NcursesWindow_State* wdw)
 	// Now safe to destroy other resources
 	Vis_Destroy(wdw->v);
 
+	Vis_Cleanup();
+
 	free(wdw);
 }
 
@@ -762,6 +840,9 @@ NcursesWindow_Init(Player_State* ps)
 	}
 
 	wdw->ps = ps;
+
+	// Seed random number generator for visualization colors
+	srand((unsigned int)time(NULL));
 
 	// Initialize ncurses
 	initscr();
@@ -783,55 +864,7 @@ NcursesWindow_Init(Player_State* ps)
 	}
 
 	// Initialize colors
-	if (has_colors()) {
-		start_color();
-		use_default_colors();
-
-		// Color pairs
-		init_pair(1, COLOR_BLUE, -1);     // Directories (bold)
-		init_pair(2, COLOR_WHITE, -1);    // Files
-		init_pair(3, COLOR_BLACK, COLOR_WHITE);  // Status bar (inverted)
-		init_pair(4, COLOR_YELLOW, -1);   // Song title
-		init_pair(5, COLOR_GREEN, -1);    // Time display
-		init_pair(6, COLOR_BLUE, -1);     // FFT: low energy (blue)
-		init_pair(7, COLOR_CYAN, -1);     // FFT: medium-low energy
-		init_pair(8, COLOR_YELLOW, -1);   // FFT: medium-high energy
-		init_pair(9, COLOR_RED, -1);       // FFT: high energy (red)
-		// Status bar colors on inverted background
-		init_pair(10, COLOR_GREEN, COLOR_WHITE);  // "on" state (green on white)
-		init_pair(11, COLOR_RED, COLOR_WHITE);   // "off" state (red on white)
-		init_pair(12, COLOR_GREEN, COLOR_WHITE); // Numeric values (green on white)
-		init_pair(13, COLOR_YELLOW, COLOR_BLACK); // Vis mode (yellow on black, stands out)
-		// Scope visualization random colors
-		init_pair(14, COLOR_MAGENTA, -1);  // Random color 1
-		init_pair(15, COLOR_CYAN, -1);     // Random color 2
-		init_pair(16, COLOR_GREEN, -1);    // Random color 3
-		init_pair(17, COLOR_WHITE, -1);    // Random color 4
-		init_pair(18, COLOR_YELLOW, -1);   // Random color 5
-		init_pair(19, COLOR_BLUE, -1);     // Random color 6
-
-		wdw->color_dir = COLOR_PAIR(1);
-		wdw->color_file = COLOR_PAIR(2);
-		wdw->color_status = COLOR_PAIR(3);
-		wdw->color_title = COLOR_PAIR(4);
-		wdw->color_time = COLOR_PAIR(5);
-		wdw->color_status_on = COLOR_PAIR(10);    // Green on white
-		wdw->color_status_off = COLOR_PAIR(11);   // Red on white
-		wdw->color_status_value = COLOR_PAIR(12); // Green on white
-		wdw->color_status_vis = COLOR_PAIR(13);   // Yellow (bold will be added)
-	} else {
-		// Fallback for colorless terminals
-		wdw->color_dir = A_BOLD;
-		wdw->color_file = A_NORMAL;
-		wdw->color_status = A_REVERSE;
-		wdw->color_title = A_BOLD;
-		wdw->color_time = A_NORMAL;
-		// Status bar fallback
-		wdw->color_status_on = A_BOLD;     // Bold for "on"
-		wdw->color_status_off = A_NORMAL;  // Normal for "off"
-		wdw->color_status_value = A_BOLD;  // Bold for values
-		wdw->color_status_vis = A_BOLD;     // Bold for vis mode
-	}
+	InitColorPairs(wdw);
 
 	// Set up layout
 	NcursesWindow_RecalcLayout(wdw);
