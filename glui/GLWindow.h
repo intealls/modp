@@ -46,11 +46,13 @@ typedef struct Options {
 typedef struct Star {
 	int speed_x, speed_y,
 	    xpos, ypos,
+	    trail_xpos, trail_ypos,
 	    size,
 	    phase, phase_inc,
 	    rotation, rotation_inc;
 
 	bool in_front, visible;
+	float trail_alpha;
 } Star;
 
 struct Vis_State {

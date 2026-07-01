@@ -383,6 +383,8 @@ Vis_Init(size_t wdw_width, size_t wdw_height, size_t nsamples, size_t nstars)
 		v->stars[i].speed_y = rand() % (STAR_SPEED_MAX - STAR_SPEED_MIN + 1) + STAR_SPEED_MIN;
 		v->stars[i].xpos = rand() % wdw_width;
 		v->stars[i].ypos = rand() % wdw_height;
+		v->stars[i].trail_xpos = v->stars[i].xpos;
+		v->stars[i].trail_ypos = v->stars[i].ypos;
 		v->stars[i].size = rand() % STAR_SIZE_MAX;
 		v->stars[i].in_front = rand() % STAR_FLIP;
 		v->stars[i].phase = 0;
@@ -390,6 +392,7 @@ Vis_Init(size_t wdw_width, size_t wdw_height, size_t nsamples, size_t nstars)
 		v->stars[i].rotation = 0;
 		v->stars[i].rotation_inc = rand() % STAR_ROT_INC_MAX + 1;
 		v->stars[i].visible = false;
+		v->stars[i].trail_alpha = 0.f;
 	}
 
 	/* Waterfall (spectrogram) buffer + OpenGL texture */
@@ -598,6 +601,7 @@ static void
 Vis_UpdateStars(Vis_State* v, const GLWindow_State* wdw)
 {
 	const bool playing = wdw->ps->am->playing;
+	const float trail = wdw->opts->ui.trail_factor;
 
 	for (size_t i = 0; i < v->nstars; i++) {
 		Star* s = &v->stars[i];
@@ -609,18 +613,53 @@ Vis_UpdateStars(Vis_State* v, const GLWindow_State* wdw)
 			s->rotation = (s->rotation + s->rotation_inc) % 360;
 		}
 
-		if (s->ypos >= (int)wdw->height) {
-			s->visible = playing;
+		/* Wrap around with proper handling for negative values */
+		if (s->xpos < 0)
+			s->xpos += wdw->width;
+		else if (s->xpos >= (int)wdw->width)
+			s->xpos -= wdw->width;
+
+		if (s->ypos < 0)
+			s->ypos += wdw->height;
+		else if (s->ypos >= (int)wdw->height) {
+			/* Respawn star at top when it falls off bottom */
 			s->xpos = rand() % wdw->width;
 			s->ypos = 0;
+			s->trail_alpha = 0.f;
 		}
 
-		s->xpos %= wdw->width;
-		s->ypos %= wdw->height;
+		/* Store current position as trail position after movement */
+		s->trail_xpos = s->xpos;
+		s->trail_ypos = s->ypos;
+
+		/* Decay trail alpha when music is playing, reset when stopped */
+		if (playing && trail > 0.f)
+			s->trail_alpha *= (1.f - trail * 0.1f);
+		else if (!playing)
+			s->trail_alpha = 0.f;
+
+		s->visible = playing;
 	}
 }
 
 /* ── Star rendering ──────────────────────────────────────────────────── */
+
+static void
+draw_star_quads(int xpos, int ypos, int size, int rotation)
+{
+	glPushMatrix();
+	glTranslatef(xpos, ypos, 0);
+	glRotatef(rotation, 0, 0, 1);
+	glBegin(GL_QUADS);
+	{
+		glVertex2i(-size / 2, -size / 2);
+		glVertex2i(size / 2, -size / 2);
+		glVertex2i(size / 2, size / 2);
+		glVertex2i(-size / 2, size / 2);
+	}
+	glEnd();
+	glPopMatrix();
+}
 
 static void
 GLUI_DrawStars(GLWindow_State* wdw, bool in_front)
@@ -631,27 +670,26 @@ GLUI_DrawStars(GLWindow_State* wdw, bool in_front)
 	glDisable(GL_TEXTURE_2D);
 
 	for (size_t i = 0; i < wdw->v->nstars; i++) {
-		if (!stars[i].in_front && in_front)
+		Star* s = &stars[i];
+
+		if (!s->in_front && in_front)
 			continue;
-		if (!stars[i].visible)
+		if (!s->visible)
 			continue;
 
-		int xpos = stars[i].xpos + stars[i].size * sin(stars[i].phase * M_PI / 180);
-		int ypos = stars[i].ypos;
+		int xpos = s->xpos + s->size * sin(s->phase * M_PI / 180);
+		int ypos = s->ypos;
+		float flicker = (float)rand() / (float)RAND_MAX;
 
-		glPushMatrix();
-		glColor4f(1, 1, 0, (float)rand() / (float)RAND_MAX);  /* alpha flicker */
-		glTranslatef(xpos, ypos, 0);
-		glRotatef(stars[i].rotation, 0, 0, 1);
-		glBegin(GL_QUADS);
-		{
-			glVertex2i(-stars[i].size / 2, -stars[i].size / 2);
-			glVertex2i(stars[i].size / 2, -stars[i].size / 2);
-			glVertex2i(stars[i].size / 2, stars[i].size / 2);
-			glVertex2i(-stars[i].size / 2, stars[i].size / 2);
+		/* Draw trail at previous position if it has accumulated alpha */
+		if (s->trail_alpha > 0.f) {
+			glColor4f(1, 1, 0, s->trail_alpha * flicker);
+			draw_star_quads(s->trail_xpos, s->trail_ypos, s->size, s->rotation);
 		}
-		glEnd();
-		glPopMatrix();
+
+		/* Draw main star at current position */
+		glColor4f(1, 1, 0, flicker);
+		draw_star_quads(xpos, ypos, s->size, s->rotation);
 	}
 	glEnable(GL_TEXTURE_2D);
 	GL_OrthoOff();
@@ -1260,30 +1298,18 @@ GLUI_DrawSongTime(GLWindow_State* wdw, int y, int zoom)
 void
 GLUI_Draw(GLWindow_State* wdw)
 {
-	/* Either clear the framebuffer or fade it for the reverb trail effect.
-	 * When trail is active, we skip clearing so the previous frame persists
-	 * and gets darkened by the trail quad below. */
-	if (wdw->opts->ui.trail_factor > 0.f) {
-		glEnable(GL_BLEND);
-		glBlendFunc(GL_ZERO, GL_ONE_MINUS_SRC_ALPHA);
-		glColor4f(0.f, 0.f, 0.f, wdw->opts->ui.trail_factor);
-		GL_OrthoOn(wdw->width, wdw->height);
-		glBegin(GL_QUADS);
-		{
-			glVertex2i(0, 0);
-			glVertex2i(wdw->width, 0);
-			glVertex2i(wdw->width, wdw->height);
-			glVertex2i(0, wdw->height);
-		}
-		glEnd();
-		GL_OrthoOff();
-		glEnable(GL_BLEND);
-		glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-		glColor4f(1.f, 1.f, 1.f, 1.f);
-	}
-	else {
-		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-	}
+	/* Compute background clear color before clearing */
+	float boost = wdw->v->mean_energy_band_div16 / MAX_ENERGY * wdw->opts->ui.bg_flash_factor;
+	boost *= boost;
+
+	float bg_r = wdw->opts->ui.clr[0] + wdw->v->reactive_color[0] * REACTIVE_BLEND + boost;
+	float bg_g = wdw->opts->ui.clr[1] + wdw->v->reactive_color[1] * REACTIVE_BLEND + boost;
+	float bg_b = wdw->opts->ui.clr[2] + wdw->v->reactive_color[2] * REACTIVE_BLEND + boost;
+	glClearColor(bg_r, bg_g, bg_b, 1.f);
+
+	/* Clear the framebuffer every frame. Trails are now explicit, stored
+	 * per-star positions instead of old framebuffer pixels left behind. */
+	GL_Clear();
 
 	glMatrixMode(GL_MODELVIEW);
 	glLoadIdentity();
@@ -1296,15 +1322,6 @@ GLUI_Draw(GLWindow_State* wdw)
 
 	/* Options editor overlay (drawn on top of everything) */
 	GLUI_DrawOptionsEditor(wdw);
-
-	/* Background color: blend base with reactive spectral color + energy flash */
-	float boost = wdw->v->mean_energy_band_div16 / MAX_ENERGY * wdw->opts->ui.bg_flash_factor;
-	boost *= boost;
-
-	float r = wdw->opts->ui.clr[0] + wdw->v->reactive_color[0] * REACTIVE_BLEND + boost;
-	float g = wdw->opts->ui.clr[1] + wdw->v->reactive_color[1] * REACTIVE_BLEND + boost;
-	float b = wdw->opts->ui.clr[2] + wdw->v->reactive_color[2] * REACTIVE_BLEND + boost;
-	glClearColor(r, g, b, 0.f);
 
 	/* Draw browser list (zoom=2) */
 	int y = wdw->layout_browser_y;
