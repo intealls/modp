@@ -200,8 +200,8 @@ LocalDir_ReadFile(const char* path,
 		return NULL;
 	}
 
-	// Check for size_t overflow on 32-bit systems
-	if ((size_t)st.st_size > SIZE_MAX - 16) {
+	// Check for negative st.st_size (e.g. corrupted inode) before casting to size_t
+	if (st.st_size < 0) {
 		fclose(f);
 		return NULL;
 	}

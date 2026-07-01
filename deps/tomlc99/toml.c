@@ -418,6 +418,9 @@ static void *expand(void *p, int sz, int newsz) {
 }
 
 static void **expand_ptrarr(void **p, int n) {
+  // Check for integer overflow: (n + 1) * sizeof(void *)
+  if (n < 0 || (size_t)(n + 1) > ((size_t)-1) / sizeof(void *))
+    return 0;
   void **s = MALLOC((n + 1) * sizeof(void *));
   if (!s)
     return 0;
@@ -429,6 +432,9 @@ static void **expand_ptrarr(void **p, int n) {
 }
 
 static toml_arritem_t *expand_arritem(toml_arritem_t *p, int n) {
+  // Check for integer overflow: (n + 1) * sizeof(*p)
+  if (n < 0 || (size_t)(n + 1) > ((size_t)-1) / sizeof(*p))
+    return 0;
   toml_arritem_t *pp = expand(p, n * sizeof(*p), (n + 1) * sizeof(*p));
   if (!pp)
     return 0;

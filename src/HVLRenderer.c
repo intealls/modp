@@ -70,7 +70,9 @@ HVLRenderer_Load(const AudioRenderer* obj,
 			break;
 		}
 
-		strcpy(rndr_data->info + info_len, name);
+		// Use memcpy instead of strcpy to avoid reading past null terminator
+		// of untrusted HVL file data
+		memcpy(rndr_data->info + info_len, name, name_len);
 		info_len += name_len;
 
 		if (newline_len > 0) {

@@ -48,6 +48,7 @@ static void
 print_help(Option* option, size_t n_opts)
 {
 	for (size_t i = 0; i < n_opts; i++) {
+		// Safe: format string is a literal; %s arguments cannot trigger format attacks
 		printf("  --%-25s%s", option[i].long_name, option[i].description);
 		print_value_description(&option[i]);
 	}
