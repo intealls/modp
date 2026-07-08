@@ -349,12 +349,18 @@ DrawScopeVisualization(NcursesWindow_State* wdw)
 	// Grow persistent buffers if the terminal got wider
 	if ((size_t)w > v->scope_w) {
 		int* new_yrow = realloc(v->scope_yrow, w * sizeof(*new_yrow));
+		if (!new_yrow) {
+			clear_visualization_area(wdw);
+			return;
+		}
+
 		int* new_colors = realloc(v->scope_colors, w * sizeof(*new_colors));
-		if (!new_yrow || !new_colors) {
+		if (!new_colors) {
 			free(new_yrow);
 			clear_visualization_area(wdw);
 			return;
 		}
+
 		v->scope_yrow = new_yrow;
 		v->scope_colors = new_colors;
 		v->scope_w = (size_t)w;
@@ -785,6 +791,7 @@ NcursesWindow_ProcessEvents(NcursesWindow_State* wdw, bool* got_input)
 				// Terminal too small, restore old state
 				wdw->width = old_width;
 				wdw->height = old_height;
+				NcursesWindow_RecalcLayout(wdw);  // Restore layout vars
 				return true;
 			}
 
