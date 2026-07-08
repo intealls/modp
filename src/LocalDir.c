@@ -195,13 +195,8 @@ LocalDir_ReadFile(const char* path,
 	struct stat st;
 	if (fstat(fileno(f), &st) == -1 || !S_ISREG(st.st_mode)
 	    || st.st_size <= 0
+	    || (size_t)st.st_size > SIZE_MAX - 16
 	    || st.st_size > (off_t)max_len) {
-		fclose(f);
-		return NULL;
-	}
-
-	// Check for negative st.st_size (e.g. corrupted inode) before casting to size_t
-	if (st.st_size < 0) {
 		fclose(f);
 		return NULL;
 	}
