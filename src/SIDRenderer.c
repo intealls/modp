@@ -15,7 +15,7 @@
 #include "VTableInit.h"
 
 typedef struct SIDRenderer_Data {
-	struct ReSIDfpBuilder* resid_builder;
+	struct SIDLiteBuilder* sidlite_builder;
 	struct SidTune* sid_tune;
 	struct sidplayfp* sid_engine;
 	char title[MODP_STR_LENGTH];
@@ -25,6 +25,7 @@ typedef struct SIDRenderer_Data {
 	int current_track;
 	int track_length;
 	int fs, bits, channels;
+	int mixer_initialized;
 } SIDRenderer_Data;
 
 #define DataObject(a, b) \
@@ -50,11 +51,11 @@ SIDRenderer_Load(const AudioRenderer* obj,
                  const size_t len)
 {
 	DataObject(rndr_data, obj);
-	rndr_data->resid_builder = newReSIDfpBuilder();
+	rndr_data->sidlite_builder = newSIDLiteBuilder();
 	rndr_data->sid_engine = newSidEngine();
 	rndr_data->sid_tune = newSidTune(data, len);
 
-	if (!initSidEngine(rndr_data->sid_engine, rndr_data->resid_builder, rndr_data->channels, rndr_data->fs)) {
+	if (!initSidEngine(rndr_data->sid_engine, rndr_data->sidlite_builder, rndr_data->channels, rndr_data->fs)) {
 		SIDRenderer_LogFunc("error initializing libsidplayfp engine");
 		SIDRenderer_DeleteInterfaces(obj);
 		return 1;
@@ -66,6 +67,10 @@ SIDRenderer_Load(const AudioRenderer* obj,
 		return 1;
 	}
 
+	// Initialize the mixer for stereo output (like the demo)
+	initMixerSidEngine(rndr_data->sid_engine, (rndr_data->channels == 2));
+	rndr_data->mixer_initialized = 1;
+
 	rndr_data->songs = songsSidTune(rndr_data->sid_tune);
 	StrCpy(rndr_data->title, MODP_STR_LENGTH, filename);
 	return SIDRenderer_SetTrack(obj, 0);
@@ -74,10 +79,10 @@ SIDRenderer_Load(const AudioRenderer* obj,
 void SIDRenderer_DeleteInterfaces(const AudioRenderer* obj)
 {
 	DataObject(rndr_data, obj);
-	deleteReSIDfpBuilder(rndr_data->resid_builder);
+	deleteSIDLiteBuilder(rndr_data->sidlite_builder);
 	deleteSideEngine(rndr_data->sid_engine);
 	deleteSidTune(rndr_data->sid_tune);
-	rndr_data->resid_builder = NULL;
+	rndr_data->sidlite_builder = NULL;
 	rndr_data->sid_engine = NULL;
 	rndr_data->sid_tune = NULL;
 }
@@ -116,26 +121,40 @@ SIDRenderer_UnLoad(const AudioRenderer* obj)
 	rndr_data->track_length = -1;
 	rndr_data->total_frames_rendered = 0;
 	rndr_data->songs = 0;
+	rndr_data->mixer_initialized = 0;
 }
+
+// Number of cycles to run the emulation at each step
+// 5000 cycles at ~1MHz = ~5ms
+#define SID_CYCLES 5000
 
 static int
 SIDRenderer_Render(const AudioRenderer* obj,
                    void* buf,
-                   const size_t len SDL_UNUSED)
+                   const size_t len)
 {
 	DataObject(rndr_data, obj);
 	int16_t* rndr_buf = (int16_t*) buf;
 	size_t rendered = 0;
-	size_t to_render = rndr_data->fs / rndr_data->channels;
-		
-	while (rendered < to_render) {
-		rendered += playSidEngine(rndr_data->sid_engine, rndr_buf, to_render);
+	size_t target = len / sizeof(short);
+
+	while (rendered < target) {
+		// Run the emulation for SID_CYCLES cycles
+		int res = playSidEngineCycles(rndr_data->sid_engine, SID_CYCLES);
+		if (res < 0) {
+			SIDRenderer_LogFunc("error during SID playback");
+			break;
+		}
+
+		// Mix the audio into the output buffer
+		unsigned int s = mixSidEngine(rndr_data->sid_engine, rndr_buf + rendered, (unsigned int) res);
+		if (s == 0) break;
+		rendered += s;
 	}
 
-	assert(((int) rendered - to_render) == 0);
 	rndr_data->total_frames_rendered += rendered / rndr_data->channels;
 
-	return rendered;
+	return (int) rendered;
 }
 
 static const char*
@@ -215,6 +234,9 @@ SIDRenderer_SetTrack(const AudioRenderer* obj, int track)
 			return -1;
 		}
 
+		// Re-initialize the mixer for the new song
+		initMixerSidEngine(rndr_data->sid_engine, (rndr_data->channels == 2));
+
 		infostr_len = numberOfInfoStringsSidTune(rndr_data->sid_tune) - 1;
 
 		for (size_t i = 0; i <= infostr_len; i++) {
@@ -247,7 +269,7 @@ static int
 SIDRenderer_Length(const AudioRenderer* obj)
 {
 	DataObject(rndr_data, obj);
-	/* todo:  sids do not set track length, 
+	/* todo:  sids do not set track length,
 	* hvsc provides a db: https://www.hvsc.c64.org/download/C64Music/DOCUMENTS/Songlengths.txt
 	* perhaps some libcurl fetch, store and use
 	*/
@@ -315,9 +337,10 @@ SIDRenderer_Create(int fs, int bits, int channels)
 	rndr_data->fs = fs;
 	rndr_data->bits = bits;
 	rndr_data->channels = channels;
-	rndr_data->resid_builder = NULL;
+	rndr_data->sidlite_builder = NULL;
 	rndr_data->sid_tune = NULL;
 	rndr_data->sid_engine = NULL;
+	rndr_data->mixer_initialized = 0;
 
 	rndr_data->current_track = -1;
 	rndr_data->track_length = -1;

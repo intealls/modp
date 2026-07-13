@@ -173,7 +173,7 @@ GMERenderer_Render(const AudioRenderer* obj,
 	if (rndr_data->err != NULL)
 		fprintf(stderr, "%s\n", rndr_data->err);
 
-	return len;
+	return len / sizeof(T);
 }
 
 static const char*

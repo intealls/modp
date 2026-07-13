@@ -221,7 +221,7 @@ RenderThread(void* data)
 			                                temp,
 			                                samples * sizeof(T));
 
-			RingBuffer_Write(am->render_buf, temp, samples);
+			RingBuffer_Write(am->render_buf, temp, rendered);
 		}
 
 		SDL_UnlockMutex(am->mutex);

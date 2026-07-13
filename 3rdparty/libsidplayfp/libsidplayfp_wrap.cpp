@@ -16,14 +16,14 @@ deleteSidConfig(SidConfig *c)
 	delete c;
 }
 
-ReSIDfpBuilder*
-newReSIDfpBuilder()
+SIDLiteBuilder*
+newSIDLiteBuilder()
 {
-	return new ReSIDfpBuilder("modp_libsidplayfp_wrapper");
+	return new SIDLiteBuilder("modp_libsidplayfp_wrapper");
 }
 
 void
-deleteReSIDfpBuilder(ReSIDfpBuilder *c)
+deleteSIDLiteBuilder(SIDLiteBuilder *c)
 {
 	delete c;
 }
@@ -40,23 +40,24 @@ deleteSideEngine(sidplayfp *c)
 	delete c;
 }
 
+void
+setRomsSidEngine(sidplayfp *m_engine,
+                 const uint8_t *kernal,
+                 const uint8_t *basic,
+                 const uint8_t *chargen)
+{
+	m_engine->setRoms(kernal, basic, chargen);
+}
+
 unsigned int
 initSidEngine(sidplayfp *m_engine,
-              ReSIDfpBuilder *rs,
+              SIDLiteBuilder *rs,
               unsigned int channels,
               unsigned int samplerate)
 {
 	SidConfig e_config;
-	rs->create(m_engine->info().maxsids());
 
-	if (!rs->getStatus()) {
-		std::cerr << rs->error() << std::endl;
-		return 0;
-	}
-
-	e_config.fastSampling = false;
 	e_config.frequency = samplerate;
-	e_config.playback = (channels == 1) ? SidConfig::MONO : SidConfig::STEREO;
 	e_config.samplingMethod = SidConfig::INTERPOLATE;
 	e_config.sidEmulation = rs;
 
@@ -90,19 +91,28 @@ loadSidTune(SidTune *m_tune, sidplayfp *m_engine)
 	return 1;
 }
 
-unsigned int
-playSidEngine(sidplayfp *m_engine,
-              short *buf,
-              size_t buffer_samples)
+void
+initMixerSidEngine(sidplayfp *m_engine, bool stereo)
 {
-	// unsigned int buffer_samples = ((m_engine->config().frequency * 2 * 2) / 50);
-	return m_engine->play(buf, buffer_samples);
+	m_engine->initMixer(stereo);
 }
 
-bool
-isPlayingSidEngine(sidplayfp *m_engine)
+int
+getBufSizeSidEngine(sidplayfp *m_engine, unsigned int cycles)
 {
-	return m_engine->isPlaying();
+	return m_engine->getBufSize(cycles);
+}
+
+int
+playSidEngineCycles(sidplayfp *m_engine, unsigned int cycles)
+{
+	return m_engine->play(cycles);
+}
+
+unsigned int
+mixSidEngine(sidplayfp *m_engine, short *buf, unsigned int samples)
+{
+	return m_engine->mix(buf, samples);
 }
 
 unsigned int

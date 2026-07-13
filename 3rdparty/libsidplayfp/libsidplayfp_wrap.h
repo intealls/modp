@@ -6,7 +6,7 @@
 #include <sidplayfp/sidplayfp.h>
 #include <sidplayfp/SidTune.h>
 #include <sidplayfp/SidInfo.h>
-#include <sidplayfp/builders/residfp.h>
+#include <sidplayfp/builders/sidlite.h>
 #include "sidplayfp/siddefs.h"
 #include <sidplayfp/SidTuneInfo.h>
 
@@ -17,21 +17,25 @@ extern "C" {
 #include <stddef.h>
 #include <stdint.h>
 
-typedef struct ReSIDfpBuilder ReSIDfpBuilder;
+typedef struct SIDLiteBuilder SIDLiteBuilder;
 typedef struct SidConfig SidConfig;
 typedef struct sidplayfp sidplayfp;
 typedef struct SidTune SidTune;
 
-struct ReSIDfpBuilder* newReSIDfpBuilder();
-void                   deleteReSIDfpBuilder(ReSIDfpBuilder*);
+struct SIDLiteBuilder* newSIDLiteBuilder();
+void                   deleteSIDLiteBuilder(SIDLiteBuilder*);
 
 struct SidConfig*      newSidConfig();
 void                   deleteSidConfig(SidConfig*);
 
 struct sidplayfp*      newSidEngine();
 void                   deleteSideEngine(sidplayfp*);
-unsigned int           initSidEngine(sidplayfp*, ReSIDfpBuilder*, unsigned int, unsigned int);
-bool                   isPlayingSidEngine(sidplayfp*);
+void                   setRomsSidEngine(sidplayfp*, const uint8_t*, const uint8_t*, const uint8_t*);
+unsigned int           initSidEngine(sidplayfp*, SIDLiteBuilder*, unsigned int, unsigned int);
+void                   initMixerSidEngine(sidplayfp*, bool stereo);
+int                    getBufSizeSidEngine(sidplayfp*, unsigned int cycles);
+int                    playSidEngineCycles(sidplayfp*, unsigned int cycles);
+unsigned int           mixSidEngine(sidplayfp*, short*, unsigned int samples);
 
 struct SidTune*        newSidTune(const void*, unsigned int);
 void                   deleteSidTune(SidTune*);
@@ -47,7 +51,6 @@ unsigned int           currentSongSidTune(SidTune*);
 
 bool                   getStatusSidTune(SidTune*);
 unsigned int           loadSidTune(struct SidTune*, struct sidplayfp*);
-unsigned int           playSidEngine(sidplayfp*, short*, size_t);
 
 #ifdef __cplusplus
 }
