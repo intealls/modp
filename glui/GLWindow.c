@@ -191,12 +191,18 @@ GLUI_DrawOptionsEditor(GLWindow_State* wdw)
 	/* Overlay dimensions — fit to actual option count */
 	int overlay_w = 72 * fw * text_zoom;
 	int overlay_h = (NUM_OPTIONS + 3) * fh * text_zoom;  /* title + separator + options + footer */
-	int ox = (int)((float)wdw->width * 0.2f) - overlay_w / 2;
-	int oy = (int)wdw->height / 2 - overlay_h / 2;
 
-	/* Clamp if overlay is larger than window */
-	if (overlay_w > (int)wdw->width) { ox = 0; overlay_w = (int)wdw->width; }
-	if (overlay_h > (int)wdw->height) { oy = 0; overlay_h = (int)wdw->height; }
+	/* Keep overlay reasonably sized relative to screen */
+	int max_overlay_w = (int)wdw->width * 4 / 5;  // 80% of screen width
+	int max_overlay_h = (int)wdw->height * 7 / 10; // 70% of screen height
+	if (overlay_w > max_overlay_w)
+		overlay_w = max_overlay_w;
+	if (overlay_h > max_overlay_h)
+		overlay_h = max_overlay_h;
+
+	/* Center the overlay both horizontally and vertically */
+	int ox = ((int)wdw->width - overlay_w) / 2;
+	int oy = ((int)wdw->height - overlay_h) / 2;
 
 	/* Overlay top in OpenGL coords (y=0 at bottom) */
 	int gl_oy = wdw->height - oy;
