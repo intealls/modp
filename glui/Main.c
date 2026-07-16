@@ -157,7 +157,7 @@ main(int argc, char* argv[])
 	                   .type = OPT_FLOAT,
 	                   .has_arg = true,
 	                   .in_cfg_file = true,
-	                   .initial.f = 0.f,
+	                   .initial.f = 4.f,
 	                   .min.f = 0.f,
 	                   .max.f = 100.f,
 	                   .dest = &o.ui.font_shake_factor },
@@ -166,7 +166,7 @@ main(int argc, char* argv[])
 	                   .type = OPT_FLOAT,
 	                   .has_arg = true,
 	                   .in_cfg_file = true,
-	                   .initial.f = 0.f,
+	                   .initial.f = 4.f,
 	                   .min.f = 0.f,
 	                   .max.f = 100.f,
 	                   .dest = &o.ui.font_zoom_factor },
@@ -175,7 +175,7 @@ main(int argc, char* argv[])
 	                   .type = OPT_FLOAT,
 	                   .has_arg = true,
 	                   .in_cfg_file = true,
-	                   .initial.f = 0.f,
+	                   .initial.f = 50.f,
 	                   .min.f = 0.f,
 	                   .max.f = 100.f,
 	                   .dest = &o.ui.font_rotation_factor },
@@ -184,7 +184,7 @@ main(int argc, char* argv[])
 	                   .type = OPT_FLOAT,
 	                   .has_arg = true,
 	                   .in_cfg_file = true,
-	                   .initial.f = 0.f,
+	                   .initial.f = 2.f,
 	                   .min.f = 0.f,
 	                   .max.f = 100.f,
 	                   .dest = &o.ui.perturb_waterfall_factor },
@@ -193,7 +193,7 @@ main(int argc, char* argv[])
 	                   .type = OPT_FLOAT,
 	                   .has_arg = true,
 	                   .in_cfg_file = true,
-	                   .initial.f = 0.f,
+	                   .initial.f = 2.f,
 	                   .min.f = 0.f,
 	                   .max.f = 100.f,
 	                   .dest = &o.ui.bg_flash_factor },
@@ -202,7 +202,7 @@ main(int argc, char* argv[])
 	                   .type = OPT_FLOAT,
 	                   .has_arg = true,
 	                   .in_cfg_file = true,
-	                   .initial.f = 0.f,
+	                   .initial.f = 4.f,
 	                   .min.f = 0.f,
 	                   .max.f = 100.f,
 	                   .dest = &o.ui.circ_pulse_factor },
@@ -211,7 +211,7 @@ main(int argc, char* argv[])
 	                   .type = OPT_FLOAT,
 	                   .has_arg = true,
 	                   .in_cfg_file = true,
-	                   .initial.f = 0.f,
+	                   .initial.f = 2.f,
 	                   .min.f = 0.f,
 	                   .max.f = 100.f,
 	                   .dest = &o.ui.circ_spin_factor },
@@ -233,7 +233,7 @@ main(int argc, char* argv[])
 
 	/* Initialize UI option descriptions from unified ui_options[] array */
 	/* This ensures single source of truth for UI option metadata */
-	const size_t first_ui_opt = 14;  /* Index of bg_red in opt[] */
+	const size_t first_ui_opt = 12;  /* Index of bg_red in opt[] */
 	for (size_t i = 0; i < NUM_UI_OPTIONS && (first_ui_opt + i) < sizeof(opt) / sizeof(opt[0]); i++) {
 		strcpy(opt[first_ui_opt + i].long_name, (char*)ui_options[i].config_name);
 		strcpy(opt[first_ui_opt + i].description, (char*)ui_options[i].description);

@@ -123,14 +123,13 @@ XMPRenderer_Render(const AudioRenderer* obj,
 
 	int16_t* rndr_buf = (int16_t*) buf;
 
-	size_t byte_scale = (rndr_data->bits / 8) * rndr_data->channels;
-	size_t to_render = len / byte_scale;
+	size_t to_render = len / sizeof(int16_t);
 
 	xmp_play_buffer(rndr_data->ctx, rndr_buf, len, 0);
 
-	rndr_data->total_frames_rendered += to_render;
+	rndr_data->total_frames_rendered += to_render / rndr_data->channels;
 
-	return to_render;
+	return (int) to_render;
 }
 
 static const char*

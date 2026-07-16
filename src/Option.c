@@ -410,28 +410,28 @@ config_lookup_set_dest(toml_table_t* config, Option* option)
 static char*
 get_config_from_opts(int argc, char* argv[], Option* option, size_t n_opts)
 {
-    //TODO make this function less weird
 	struct option* long_options = calloc(n_opts + 1, sizeof(struct option));
 	if (!long_options) return NULL;
 	Option* option_iter = option;
+	Option* config_opt = NULL;  /* Track config option for default return */
 
-	for (size_t i = 0; i < n_opts;  i++) {
+	/* Build complete long_options array and find config option */
+	for (size_t i = 0; i < n_opts; i++) {
 		long_options[i].name = option_iter->long_name;
 		long_options[i].has_arg = option_iter->has_arg;
 		switch (option_iter->type) {
 			case OPT_STRING:
-                if (strcmp(option_iter->long_name, "config") == 0) {
-				    set_dest_from_value(option_iter, (void*) option_iter->initial.str);
-                }
-                break;
+				if (strcmp(option_iter->long_name, "config") == 0) {
+					config_opt = option_iter;  /* Save pointer to config option */
+					set_dest_from_value(option_iter, (void*) option_iter->initial.str);
+				}
+				break;
 			default:
 				break;
 		}
-        if (strcmp(option_iter->long_name, "config") == 0) {
-            break;
-        }
 		option_iter++;
 	}
+
 	int c;
 	while (1) {
 		int option_index = 0;
@@ -446,16 +446,22 @@ get_config_from_opts(int argc, char* argv[], Option* option, size_t n_opts)
 
 		switch (tmp_option->type) {
 			case OPT_STRING:
-                if (strcmp(tmp_option->long_name, "config") == 0) {
-                    free(long_options);
-                    return optarg;
-                }
-            default:
+				if (strcmp(tmp_option->long_name, "config") == 0) {
+					free(long_options);
+					return optarg;  /* Return the actual --config argument */
+				}
 				break;
-        }
+			default:
+				break;
+		}
 	}
 	free(long_options);
-    return option_iter->initial.str;
+
+	/* Return default config path if --config was not specified */
+	if (config_opt) {
+		return config_opt->initial.str;
+	}
+	return "~/.modp/modp.toml";  /* Fallback default */
 }
 
 int
@@ -482,9 +488,10 @@ Option_Init(int argc, char* argv[], Option* option, size_t n_opts)
     }
 
 	if (!config) {
-	    SDL_LogWarn(SDL_LOG_CATEGORY_SYSTEM, "failed to parse %s: %s\n", config_path, strerror(errno));
+	    SDL_LogWarn(SDL_LOG_CATEGORY_SYSTEM, "failed to parse %s: %s\n", config_path, errbuf);
 	}
 
+	option_iter = option;
 	for (size_t i = 0; i < n_opts; i++) {
 		long_options[i].name = option_iter->long_name;
 		long_options[i].has_arg = option_iter->has_arg;

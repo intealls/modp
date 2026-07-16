@@ -1311,9 +1311,6 @@ GLUI_Draw(GLWindow_State* wdw)
 	/* Compute layout before drawing (needed for hit testing) */
 	GLUI_DrawLayout(wdw);
 
-	/* Options editor overlay (drawn on top of everything) */
-	GLUI_DrawOptionsEditor(wdw);
-
 	/* Draw browser list (zoom=2) */
 	int y = wdw->layout_browser_y;
 	int zoom = ZOOM_BROWSER;
@@ -1329,6 +1326,9 @@ GLUI_Draw(GLWindow_State* wdw)
 	zoom = ZOOM_SONG;
 	GLUI_DrawSongTime(wdw, y, zoom);
 	GLUI_DrawSongInfo(wdw, y, zoom, 2);
+
+	/* Options editor overlay (drawn on top of everything) */
+	GLUI_DrawOptionsEditor(wdw);
 }
 
 /* ── Window resize ───────────────────────────────────────────────────── */
