@@ -17,6 +17,9 @@ typedef struct Vis_State Vis_State;
 #include "RingBuffer.h"
 #include "Player.h"
 
+/* Forward declaration for UI options system */
+typedef struct UIOption UIOption;
+
 typedef struct UiCfg {
 	float clr[3];               /* Background color RGB (0–1) */
 	float font_shake_factor;    /* Text shake synced to music */
@@ -137,5 +140,8 @@ GLWindow_State* GLWindow_Init(Options*, Player_State*);
 void            GLWindow_Destroy(GLWindow_State*);
 
 void            GLUI_Draw(GLWindow_State*);
+
+/* UI Options system */
+void            GLUI_InitUIOptions(UiCfg* ui);
 
 #endif /* GLUI_GLWINDOW_H_ */

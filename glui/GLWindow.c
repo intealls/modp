@@ -80,72 +80,31 @@ static void Vis_Destroy(Vis_State* v);
 
 /* ── Options Editor data structures ──────────────────────────────────── */
 
-typedef struct OptionEntry {
-	const char* name;         /* Display name (left-aligned) */
-	const char* description;  /* Short description below name */
-	float min_val, max_val;
-} OptionEntry;
+#include "UIOptions.h"
 
 struct OptionsEditor {
 	bool active;
-	size_t selected;          /* Index into option list */
+	size_t selected;          /* Index into ui_options */
 	size_t scroll;            /* Scroll offset for the list */
 };
 
-/* ── Options list (8 entries) ───────────────────────────────────────── */
+/* ── UI Options definition (single source of truth) ──────────────────── */
 
-static OptionEntry option_list[] = {
-	/* Background color */
-	{ "BG Color R",       "Background red (0.0-1.0)",  0.0f, 1.0f },
-	{ "BG Color G",       "Background green (0.0-1.0)", 0.0f, 1.0f },
-	{ "BG Color B",       "Background blue (0.0-1.0)",  0.0f, 1.0f },
-
-	/* Font effects */
-	{ "Shake Factor",     "Text shake synced to music", 0.0f, 100.0f },
-	{ "Zoom Factor",      "Text zoom synced to music",  0.0f, 100.0f },
-	{ "Rotation Factor",  "Text rotation synced to music", 0.0f, 100.0f },
-
-	/* Visualization effects */
-	{ "Perturb Factor",   "Spectrogram perturbation", 0.0f, 100.0f },
-	{ "BG Flash Factor",  "Background flash on energy", 0.0f, 100.0f },
-
-	/* Circular vis effects */
-	{ "Circ Pulse",       "Circle expands with energy", 0.0f, 100.0f },
-	{ "Circ Spin",        "Circle spin reactivity", 0.0f, 100.0f },
-	{ "Trail Factor",     "Reverb trail persistence", 0.0f, 0.3f },
+UIOption ui_options[] = {
+	{ "bg_red",           "BG Color R",       "Background red (0.0-1.0)",           0.0f, 1.0f,  NULL, true },
+	{ "bg_green",         "BG Color G",       "Background green (0.0-1.0)",         0.0f, 1.0f,  NULL, true },
+	{ "bg_blue",          "BG Color B",       "Background blue (0.0-1.0)",          0.0f, 1.0f,  NULL, true },
+	{ "font_shake_factor",     "Shake Factor",     "Text shake synced to music",           0.0f, 100.0f, NULL, true },
+	{ "font_zoom_factor",      "Zoom Factor",      "Text zoom synced to music",            0.0f, 100.0f, NULL, true },
+	{ "font_rotation_factor",  "Rotation Factor",  "Text rotation synced to music",        0.0f, 100.0f, NULL, true },
+	{ "perturb_waterfall_factor", "Perturb Factor", "Spectrogram perturbation",            0.0f, 100.0f, NULL, true },
+	{ "bg_flash_factor",       "BG Flash Factor",  "Background flash on energy",            0.0f, 100.0f, NULL, true },
+	{ "circ_pulse_factor",     "Circ Pulse",       "Circle expands with energy",            0.0f, 100.0f, NULL, true },
+	{ "circ_spin_factor",      "Circ Spin",        "Circle spin reactivity",                0.0f, 100.0f, NULL, true },
+	{ "trail_factor",          "Trail Factor",     "Reverb trail persistence (0-0.3)",       0.0f, 0.3f,  NULL, true },
 };
 
-#define NUM_OPTIONS (sizeof(option_list) / sizeof(option_list[0]))
-
-/* Edit targets: maps option index → (float* ptr, min, max from option_list) */
-typedef struct EditTarget {
-	float* ptr;
-	float min_val, max_val;
-} EditTarget;
-
-static EditTarget
-get_edit_target(GLWindow_State* wdw, size_t idx)
-{
-	assert(idx < NUM_OPTIONS);
-	EditTarget et;
-	et.min_val = option_list[idx].min_val;
-	et.max_val = option_list[idx].max_val;
-
-	switch (idx) {
-		case 0: et.ptr = &wdw->opts->ui.clr[0]; break;
-		case 1: et.ptr = &wdw->opts->ui.clr[1]; break;
-		case 2: et.ptr = &wdw->opts->ui.clr[2]; break;
-		case 3: et.ptr = &wdw->opts->ui.font_shake_factor; break;
-		case 4: et.ptr = &wdw->opts->ui.font_zoom_factor; break;
-		case 5: et.ptr = &wdw->opts->ui.font_rotation_factor; break;
-		case 6: et.ptr = &wdw->opts->ui.perturb_waterfall_factor; break;
-		case 7: et.ptr = &wdw->opts->ui.bg_flash_factor; break;
-		case 8: et.ptr = &wdw->opts->ui.circ_pulse_factor; break;
-		case 9: et.ptr = &wdw->opts->ui.circ_spin_factor; break;
-		case 10: et.ptr = &wdw->opts->ui.trail_factor; break;
-	}
-	return et;
-}
+const size_t NUM_UI_OPTIONS = sizeof(ui_options) / sizeof(ui_options[0]);
 
 /* ── Options Editor functions ────────────────────────────────────────── */
 
@@ -160,6 +119,34 @@ GLWindow_OptionsEditor_Init(OptionsEditor* ed);
 
 static void
 GLWindow_OptionsEditor_Destroy(OptionsEditor* ed);
+
+/* ── UI Options initialization ───────────────────────────────────────── */
+
+void
+GLUI_InitUIOptions(UiCfg* ui)
+{
+	ui_options[0].value_ptr = &ui->clr[0];
+	ui_options[1].value_ptr = &ui->clr[1];
+	ui_options[2].value_ptr = &ui->clr[2];
+	ui_options[3].value_ptr = &ui->font_shake_factor;
+	ui_options[4].value_ptr = &ui->font_zoom_factor;
+	ui_options[5].value_ptr = &ui->font_rotation_factor;
+	ui_options[6].value_ptr = &ui->perturb_waterfall_factor;
+	ui_options[7].value_ptr = &ui->bg_flash_factor;
+	ui_options[8].value_ptr = &ui->circ_pulse_factor;
+	ui_options[9].value_ptr = &ui->circ_spin_factor;
+	ui_options[10].value_ptr = &ui->trail_factor;
+}
+
+int
+GLUI_GetUIOptionIndex(const char* config_name)
+{
+	for (size_t i = 0; i < NUM_UI_OPTIONS; i++) {
+		if (strcmp(ui_options[i].config_name, config_name) == 0)
+			return (int)i;
+	}
+	return -1;
+}
 
 /* ── Options Editor implementation ───────────────────────────────────── */
 
@@ -190,7 +177,7 @@ GLUI_DrawOptionsEditor(GLWindow_State* wdw)
 
 	/* Overlay dimensions — fit to actual option count */
 	int overlay_w = 72 * fw * text_zoom;
-	int overlay_h = (NUM_OPTIONS + 3) * fh * text_zoom;  /* title + separator + options + footer */
+	int overlay_h = (NUM_UI_OPTIONS + 3) * fh * text_zoom;  /* title + separator + options + footer */
 
 	/* Keep overlay reasonably sized relative to screen */
 	int max_overlay_w = (int)wdw->width * 4 / 5;  // 80% of screen width
@@ -230,17 +217,17 @@ GLUI_DrawOptionsEditor(GLWindow_State* wdw)
 	size_t visible_rows = (size_t)((overlay_h - fh * text_zoom * 3) / (fh * text_zoom));
 	if (visible_rows < 2)
 		visible_rows = 2;
-	if (visible_rows > NUM_OPTIONS)
-		visible_rows = NUM_OPTIONS;
+	if (visible_rows > NUM_UI_OPTIONS)
+		visible_rows = NUM_UI_OPTIONS;
 
 	/* Clamp scroll */
-	size_t max_scroll = NUM_OPTIONS > visible_rows ? NUM_OPTIONS - visible_rows : 0;
+	size_t max_scroll = NUM_UI_OPTIONS > visible_rows ? NUM_UI_OPTIONS - visible_rows : 0;
 	if (ed->scroll > max_scroll)
 		ed->scroll = max_scroll;
 
-	for (size_t i = 0; i < visible_rows && (ed->scroll + i) < NUM_OPTIONS; i++) {
+	for (size_t i = 0; i < visible_rows && (ed->scroll + i) < NUM_UI_OPTIONS; i++) {
 		size_t idx = ed->scroll + i;
-		const OptionEntry* oe = &option_list[idx];
+		UIOption* opt = &ui_options[idx];
 
 		int y = list_y - (int)(i * fh * text_zoom);
 		bool is_selected = (idx == ed->selected);
@@ -248,7 +235,7 @@ GLUI_DrawOptionsEditor(GLWindow_State* wdw)
 		/* Option name */
 		const char* name_color = is_selected ? "\\00ddffff" : "\\ccccccff";
 		Font_DrawString(wdw, name_color, ox + fw * text_zoom, y, text_zoom);
-		Font_DrawString(wdw, oe->name, ox + fw * text_zoom * 2, y, text_zoom);
+		Font_DrawString(wdw, opt->display_name, ox + fw * text_zoom * 2, y, text_zoom);
 
 		/* Selection indicator */
 		if (is_selected)
@@ -258,20 +245,16 @@ GLUI_DrawOptionsEditor(GLWindow_State* wdw)
 		if (is_selected) {
 			int desc_y = y - fh * text_zoom;
 			char desc_buf[256];
-			snprintf(desc_buf, sizeof(desc_buf), "\\777777ff%s", oe->description);
+			snprintf(desc_buf, sizeof(desc_buf), "\\777777ff%s", opt->description);
 			Font_DrawString(wdw, desc_buf,
 			                ox + fw * text_zoom * 2,
 			                desc_y, text_zoom);
 		}
 
-		/* Current value — read from GLWindow_State for immediate feedback */
-		if (is_selected) {
+		/* Current value — read directly from value_ptr for immediate feedback */
+		if (is_selected && opt->value_ptr) {
 			char val_str[64];
-			EditTarget et = get_edit_target(wdw, idx);
-			if (idx < 3)
-				snprintf(val_str, sizeof(val_str), "%.2f", *et.ptr);
-			else
-				snprintf(val_str, sizeof(val_str), "%.1f", *et.ptr);
+			snprintf(val_str, sizeof(val_str), "%.2f", *opt->value_ptr);
 
 			/* Right-align value within overlay */
 			int val_pixel_w = (int)strlen(val_str) * fw * text_zoom;
@@ -301,12 +284,14 @@ GLWindow_OptionsEditor_HandleKey(GLWindow_State* wdw, SDL_Keysym* keysym)
 
 	/* Left/right adjust selected value by 0.05 */
 	if (keysym->sym == SDLK_LEFT || keysym->sym == SDLK_RIGHT) {
-		EditTarget et = get_edit_target(wdw, ed->selected);
-		float delta = keysym->sym == SDLK_LEFT ? -0.05f : 0.05f;
-		float new_val = *et.ptr + delta;
-		if (new_val < et.min_val) new_val = et.min_val;
-		if (new_val > et.max_val) new_val = et.max_val;
-		*et.ptr = new_val;
+		UIOption* opt = &ui_options[ed->selected];
+		if (opt->value_ptr && opt->editable) {
+			float delta = keysym->sym == SDLK_LEFT ? -0.05f : 0.05f;
+			float new_val = *opt->value_ptr + delta;
+			if (new_val < opt->min_val) new_val = opt->min_val;
+			if (new_val > opt->max_val) new_val = opt->max_val;
+			*opt->value_ptr = new_val;
+		}
 	}
 
 	/* Up/down navigate */
@@ -319,14 +304,14 @@ GLWindow_OptionsEditor_HandleKey(GLWindow_State* wdw, SDL_Keysym* keysym)
 			}
 			break;
 		case SDLK_DOWN:
-			if (ed->selected + 1 < NUM_OPTIONS) {
+			if (ed->selected + 1 < NUM_UI_OPTIONS) {
 				ed->selected++;
 				int fh = wdw->font->font_height * 2;
 				size_t visible = (size_t)((wdw->height - fh * 3) / fh);
 				if (visible < 2) visible = 2;
 				if (ed->selected >= ed->scroll + visible)
 					ed->scroll = ed->selected - visible + 1;
-				size_t max_scroll = NUM_OPTIONS > visible ? NUM_OPTIONS - visible : 0;
+				size_t max_scroll = NUM_UI_OPTIONS > visible ? NUM_UI_OPTIONS - visible : 0;
 				if (ed->scroll > max_scroll)
 					ed->scroll = max_scroll;
 			}
@@ -1584,6 +1569,9 @@ GLWindow_Init(Options* opt, Player_State* ps)
 	gl_wdw->editor = (OptionsEditor*) calloc(1, sizeof(OptionsEditor));
 	assert(gl_wdw->editor);
 	GLWindow_OptionsEditor_Init(gl_wdw->editor);
+
+	/* Initialize UI options value pointers */
+	GLUI_InitUIOptions(&opt->ui);
 
 	if (SDL_Init(SDL_INIT_VIDEO) < 0) {
 		SDL_Log("Video initialization failed: %s", SDL_GetError());
