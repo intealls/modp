@@ -10,6 +10,7 @@
 
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_opengl.h>
+#include <time.h>
 
 #include <fftw3.h>
 
@@ -65,6 +66,14 @@
 /* Mouse wheel scroll clamp */
 #define MOUSE_SCROLL_CLAMP     5
 
+/* F-key layout positions (visible character widths) */
+#define FKEY_LABEL_WIDTH       10  /* "f1:ainc/1;" etc */
+#define FKEY_VAL_WIDTH         3   /* "000" value */
+
+/* Overlay sizing ratios */
+#define OVERLAY_MAX_WIDTH_RATIO   4  /* 4/5 = 80% */
+#define OVERLAY_MAX_HEIGHT_RATIO  7  /* 7/10 = 70% */
+
 /* ── Helpers ─────────────────────────────────────────────────────────── */
 
 #include "Font.h"
@@ -77,6 +86,74 @@
 /* ── Forward declarations ────────────────────────────────────────────── */
 
 static void Vis_Destroy(Vis_State* v);
+
+/* Waterfall rendering helpers */
+static void Vis_WaterfallScroll(Vis_State* v);
+static float Vis_WaterfallFindMaxSpectrum(const Vis_State* v);
+static void Vis_WaterfallEncodeRows(Vis_State* v, float max_spec, size_t scroll_rows);
+static void Vis_WaterfallUploadTexture(Vis_State* v);
+
+/* Circular FFT rendering helpers */
+static void CircularFFT_LinearizeSpectrum(Vis_State* v, size_t n_bars);
+static float CircularFFT_FindMaxEnergy(const Vis_State* v, size_t n_bars);
+static void CircularFFT_UpdateRotation(Vis_State* v, float energy_norm, float spin_factor);
+
+/* ── Helper functions ────────────────────────────────────────────────── */
+
+/* Clamp value to range [min_val, max_val] */
+static inline size_t
+clamp_size(size_t val, size_t min_val, size_t max_val)
+{
+	return val < min_val ? min_val : (val > max_val ? max_val : val);
+}
+
+/* Wrap coordinate to range [0, max) */
+static inline int
+wrap_coord(int val, int max)
+{
+	while (val < 0) val += max;
+	while (val >= max) val -= max;
+	return val;
+}
+
+/* Get background color with reactive boost */
+static void
+Vis_GetBackgroundColor(const Vis_State* v, const UiCfg* ui, float* r, float* g, float* b)
+{
+	float boost = v->mean_energy_band_div16 / MAX_ENERGY * ui->bg_flash_factor;
+	boost *= boost;
+	*r = ui->clr[0] + v->reactive_color[0] * REACTIVE_BLEND + boost;
+	*g = ui->clr[1] + v->reactive_color[1] * REACTIVE_BLEND + boost;
+	*b = ui->clr[2] + v->reactive_color[2] * REACTIVE_BLEND + boost;
+}
+
+/* Map spectrum value [0,1] to color (blue→cyan→green→yellow→white) */
+static void
+CircularFFT_ColorByEnergy(float spec, unsigned char* r, unsigned char* g, unsigned char* b)
+{
+	spec = fminf(fmaxf(spec, 0.f), 1.f);
+	if (spec < 0.25f) {
+		float t = spec * 4.f;
+		*r = (unsigned char)(30.f * t);
+		*g = (unsigned char)(60.f + 140.f * t);
+		*b = (unsigned char)(180.f + 75.f * t);
+	} else if (spec < 0.5f) {
+		float t = (spec - 0.25f) * 4.f;
+		*r = (unsigned char)(30.f + 30.f * t);
+		*g = (unsigned char)(200.f + 55.f * t);
+		*b = (unsigned char)(255.f * (1.f - t));
+	} else if (spec < 0.75f) {
+		float t = (spec - 0.5f) * 4.f;
+		*r = (unsigned char)(60.f + 195.f * t);
+		*g = 255;
+		*b = (unsigned char)(255.f * (1.f - t));
+	} else {
+		float t = (spec - 0.75f) * 4.f;
+		*r = 255;
+		*g = 255;
+		*b = (unsigned char)(255.f * t);
+	}
+}
 
 /* ── Options Editor data structures ──────────────────────────────────── */
 
@@ -101,7 +178,6 @@ UIOption ui_options[] = {
 	{ "bg_flash_factor",       "BG Flash Factor",  "Background flash on energy",            0.0f, 100.0f, NULL, true },
 	{ "circ_pulse_factor",     "Circ Pulse",       "Circle expands with energy",            0.0f, 100.0f, NULL, true },
 	{ "circ_spin_factor",      "Circ Spin",        "Circle spin reactivity",                0.0f, 100.0f, NULL, true },
-	{ "trail_factor",          "Trail Factor",     "Reverb trail persistence (0-0.3)",       0.0f, 0.3f,  NULL, true },
 };
 
 const size_t NUM_UI_OPTIONS = sizeof(ui_options) / sizeof(ui_options[0]);
@@ -120,6 +196,10 @@ GLWindow_OptionsEditor_Init(OptionsEditor* ed);
 static void
 GLWindow_OptionsEditor_Destroy(OptionsEditor* ed);
 
+/* ── VISIBILITY CHARACTER MAP ───────────────────────────────────────── */
+
+static const char VIS_CHARS[] = {'f', 'o', 'c', 'w', 'x'};
+
 /* ── UI Options initialization ───────────────────────────────────────── */
 
 void
@@ -135,7 +215,6 @@ GLUI_InitUIOptions(UiCfg* ui)
 	ui_options[7].value_ptr = &ui->bg_flash_factor;
 	ui_options[8].value_ptr = &ui->circ_pulse_factor;
 	ui_options[9].value_ptr = &ui->circ_spin_factor;
-	ui_options[10].value_ptr = &ui->trail_factor;
 }
 
 int
@@ -180,8 +259,8 @@ GLUI_DrawOptionsEditor(GLWindow_State* wdw)
 	int overlay_h = (NUM_UI_OPTIONS + 3) * fh * text_zoom;  /* title + separator + options + footer */
 
 	/* Keep overlay reasonably sized relative to screen */
-	int max_overlay_w = (int)wdw->width * 4 / 5;  // 80% of screen width
-	int max_overlay_h = (int)wdw->height * 7 / 10; // 70% of screen height
+	int max_overlay_w = (int)wdw->width * OVERLAY_MAX_WIDTH_RATIO / 5;
+	int max_overlay_h = (int)wdw->height * OVERLAY_MAX_HEIGHT_RATIO / 10;
 	if (overlay_w > max_overlay_w)
 		overlay_w = max_overlay_w;
 	if (overlay_h > max_overlay_h)
@@ -215,10 +294,7 @@ GLUI_DrawOptionsEditor(GLWindow_State* wdw)
 	/* Options list (scrollable) */
 	int list_y = gl_oy - fh * text_zoom * 3;
 	size_t visible_rows = (size_t)((overlay_h - fh * text_zoom * 3) / (fh * text_zoom));
-	if (visible_rows < 2)
-		visible_rows = 2;
-	if (visible_rows > NUM_UI_OPTIONS)
-		visible_rows = NUM_UI_OPTIONS;
+	visible_rows = clamp_size(visible_rows, 2, NUM_UI_OPTIONS);
 
 	/* Clamp scroll */
 	size_t max_scroll = NUM_UI_OPTIONS > visible_rows ? NUM_UI_OPTIONS - visible_rows : 0;
@@ -369,13 +445,14 @@ Vis_Init(size_t wdw_width, size_t wdw_height, size_t nsamples, size_t nstars)
 
 	v->nstars = nstars;
 
+	/* Seed PRNG once at initialization */
+	srand((unsigned int)(time(NULL) ^ (intptr_t)v));
+
 	for (size_t i = 0; i < nstars; i++) {
 		v->stars[i].speed_x = 0;
 		v->stars[i].speed_y = rand() % (STAR_SPEED_MAX - STAR_SPEED_MIN + 1) + STAR_SPEED_MIN;
 		v->stars[i].xpos = rand() % wdw_width;
 		v->stars[i].ypos = rand() % wdw_height;
-		v->stars[i].trail_xpos = v->stars[i].xpos;
-		v->stars[i].trail_ypos = v->stars[i].ypos;
 		v->stars[i].size = rand() % STAR_SIZE_MAX;
 		v->stars[i].in_front = rand() % STAR_FLIP;
 		v->stars[i].phase = 0;
@@ -383,7 +460,6 @@ Vis_Init(size_t wdw_width, size_t wdw_height, size_t nsamples, size_t nstars)
 		v->stars[i].rotation = 0;
 		v->stars[i].rotation_inc = rand() % STAR_ROT_INC_MAX + 1;
 		v->stars[i].visible = false;
-		v->stars[i].trail_alpha = 0.f;
 	}
 
 	/* Waterfall (spectrogram) buffer + OpenGL texture */
@@ -454,7 +530,9 @@ Vis_UpdateReactiveColor(Vis_State* v)
 		}
 	}
 
-	v->mean_energy_band_div16 /= v->fft_len / 16;
+	/* Guard against division by zero when fft_len < 16 */
+	if (v->fft_len >= 16)
+		v->mean_energy_band_div16 /= v->fft_len / 16;
 
 	/* Track peak energy with slow decay for normalization */
 	if (v->mean_energy_band_div16 > v->peak_energy)
@@ -483,19 +561,43 @@ Vis_UpdateReactiveColor(Vis_State* v)
 static void
 Vis_ScrollWaterfall(Vis_State* v)
 {
+	Vis_WaterfallScroll(v);
+	float max_spec = Vis_WaterfallFindMaxSpectrum(v);
+	Vis_WaterfallEncodeRows(v, max_spec, SCROLL_ROWS < v->wf_height ? SCROLL_ROWS : v->wf_height - 1);
+	Vis_WaterfallUploadTexture(v);
+}
+
+static void
+Vis_WaterfallScroll(Vis_State* v)
+{
 	size_t row_stride = v->wf_width * 4;  /* RGBA */
 	size_t scroll_rows = SCROLL_ROWS < v->wf_height ? SCROLL_ROWS : v->wf_height - 1;
+	
+	/* Guard against invalid scroll_rows or zero buffer */
+	if (scroll_rows == 0 || v->wf_height == 0 || v->wf_buf == NULL)
+		return;
+	
 	size_t scroll_bytes = row_stride * (v->wf_height - scroll_rows);
 
 	/* Shift all existing rows down by scroll_rows (push toward bottom) */
 	memmove(v->wf_buf + scroll_rows * row_stride, v->wf_buf, scroll_bytes);
+}
 
-	/* Find max spectrum value for normalization (use positive half) */
+static float
+Vis_WaterfallFindMaxSpectrum(const Vis_State* v)
+{
 	float max_spec = 0;
 	for (size_t i = 0; i < v->wf_width && i < v->fft_len / 2; i++)
 		if (v->spectrum[i] > max_spec)
 			max_spec = v->spectrum[i];
+	return max_spec;
+}
 
+static void
+Vis_WaterfallEncodeRows(Vis_State* v, float max_spec, size_t scroll_rows)
+{
+	size_t row_stride = v->wf_width * 4;  /* RGBA */
+	
 	/* Encode each new row at the top with slight fade downward. */
 	for (size_t r = 0; r < scroll_rows; r++) {
 		size_t row_idx = r;
@@ -528,8 +630,11 @@ Vis_ScrollWaterfall(Vis_State* v)
 			}
 		}
 	}
+}
 
-	/* Upload updated texture to GPU */
+static void
+Vis_WaterfallUploadTexture(Vis_State* v)
+{
 	glBindTexture(GL_TEXTURE_2D, v->wf_tex);
 	glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0,
 	                (GLsizei)v->wf_width, (GLsizei)v->wf_height,
@@ -592,7 +697,6 @@ static void
 Vis_UpdateStars(Vis_State* v, const GLWindow_State* wdw)
 {
 	const bool playing = wdw->ps->am->playing;
-	const float trail = wdw->opts->ui.trail_factor;
 
 	for (size_t i = 0; i < v->nstars; i++) {
 		Star* s = &v->stars[i];
@@ -604,30 +708,17 @@ Vis_UpdateStars(Vis_State* v, const GLWindow_State* wdw)
 			s->rotation = (s->rotation + s->rotation_inc) % 360;
 		}
 
-		/* Wrap around with proper handling for negative values */
-		if (s->xpos < 0)
-			s->xpos += wdw->width;
-		else if (s->xpos >= (int)wdw->width)
-			s->xpos -= wdw->width;
+		/* Wrap X coordinate */
+		s->xpos = wrap_coord(s->xpos, wdw->width);
 
+		/* Wrap Y coordinate with respawn at top */
 		if (s->ypos < 0)
 			s->ypos += wdw->height;
 		else if (s->ypos >= (int)wdw->height) {
 			/* Respawn star at top when it falls off bottom */
 			s->xpos = rand() % wdw->width;
 			s->ypos = 0;
-			s->trail_alpha = 0.f;
 		}
-
-		/* Store current position as trail position after movement */
-		s->trail_xpos = s->xpos;
-		s->trail_ypos = s->ypos;
-
-		/* Decay trail alpha when music is playing, reset when stopped */
-		if (playing && trail > 0.f)
-			s->trail_alpha *= (1.f - trail * 0.1f);
-		else if (!playing)
-			s->trail_alpha = 0.f;
 
 		s->visible = playing;
 	}
@@ -671,12 +762,6 @@ GLUI_DrawStars(GLWindow_State* wdw, bool in_front)
 		int xpos = s->xpos + s->size * sin(s->phase * M_PI / 180);
 		int ypos = s->ypos;
 		float flicker = (float)rand() / (float)RAND_MAX;
-
-		/* Draw trail at previous position if it has accumulated alpha */
-		if (s->trail_alpha > 0.f) {
-			glColor4f(1, 1, 0, s->trail_alpha * flicker);
-			draw_star_quads(s->trail_xpos, s->trail_ypos, s->size, s->rotation);
-		}
 
 		/* Draw main star at current position */
 		glColor4f(1, 1, 0, flicker);
@@ -819,6 +904,33 @@ draw_scope_filled(GLWindow_State* wdw)
 	draw_scope(wdw, &scope_filled_params);
 }
 
+/* ── Circular FFT rendering helpers ──────────────────────────────────── */
+
+static void
+CircularFFT_LinearizeSpectrum(Vis_State* v, size_t n_bars)
+{
+	for (size_t i = 0; i < n_bars; i++)
+		v->lin[i] = powf(10.f, v->spectrum[i]);
+}
+
+static float
+CircularFFT_FindMaxEnergy(const Vis_State* v, size_t n_bars)
+{
+	float max_energy = 0;
+	for (size_t i = 0; i < n_bars; i++)
+		if (v->lin[i] > max_energy)
+			max_energy = v->lin[i];
+	return max_energy > 0 ? max_energy : 1.f;
+}
+
+static void
+CircularFFT_UpdateRotation(Vis_State* v, float energy_norm, float spin_factor)
+{
+	float energy_delta = energy_norm - v->circ_prev_energy;
+	v->circ_prev_energy = energy_norm;
+	v->circ_rotation += energy_delta * spin_factor;
+}
+
 /* ── Circular (radial) FFT rendering ─────────────────────────────────── */
 
 static void
@@ -840,16 +952,11 @@ draw_circular_fft(GLWindow_State* wdw)
 	float inner_r = fminf(wdw->width, wdw->height) * 0.3f;
 	float outer_r = fminf(wdw->width, wdw->height) * 0.9f;
 
-	/* Linearize spectrum: convert log10 → linear energy in one pass */
-	for (size_t i = 0; i < n_bars; i++)
-		v->lin[i] = powf(10.f, v->spectrum[i]);
+	/* Linearize spectrum */
+	CircularFFT_LinearizeSpectrum(v, n_bars);
 
-	/* Normalize scale: find max energy in positive half */
-	float max_energy = 0;
-	for (size_t i = 0; i < n_bars; i++)
-		if (v->lin[i] > max_energy)
-			max_energy = v->lin[i];
-	if (max_energy <= 0) max_energy = 1;
+	/* Find max energy for normalization */
+	float max_energy = CircularFFT_FindMaxEnergy(v, n_bars);
 
 	float bar_scale = outer_r - inner_r;
 	float base_r = 0.f;
@@ -859,11 +966,8 @@ draw_circular_fft(GLWindow_State* wdw)
 	float pulse = 1.f + energy_norm * wdw->opts->ui.circ_pulse_factor;
 	bar_scale *= pulse;
 
-	/* Rotation driven by energy change — forward on attack, backward on decay,
-	 * still when energy is steady. */
-	float energy_delta = energy_norm - v->circ_prev_energy;
-	v->circ_prev_energy = energy_norm;
-	v->circ_rotation += energy_delta * wdw->opts->ui.circ_spin_factor;
+	/* Update rotation based on energy change */
+	CircularFFT_UpdateRotation(v, energy_norm, wdw->opts->ui.circ_spin_factor);
 
 	GL_OrthoOn(wdw->width, wdw->height);
 	glDisable(GL_TEXTURE_2D);
@@ -898,30 +1002,7 @@ draw_circular_fft(GLWindow_State* wdw)
 		float spec = (spec0 + spec1) * 0.5f;
 
 		unsigned char r, g, b;
-
-		/* Color by energy: low→high maps to cool→hot (blue → cyan → green → yellow → white) */
-		if (spec < 0.25f) {
-			float t = spec / 0.25f;
-			r = (unsigned char)(30.f * t);
-			g = (unsigned char)(60.f + 140.f * t);
-			b = (unsigned char)(180.f + 75.f * t);
-		} else if (spec < 0.5f) {
-			float t = (spec - 0.25f) / 0.25f;
-			r = (unsigned char)(30.f + 30.f * t);
-			g = (unsigned char)(200.f + 55.f * t);
-			b = (unsigned char)(255.f * (1.f - t));
-		} else if (spec < 0.75f) {
-			float t = (spec - 0.5f) / 0.25f;
-			r = (unsigned char)(60.f + 195.f * t);
-			g = (unsigned char)(255.f);
-			b = (unsigned char)(255.f * (1.f - t));
-		} else {
-			float t = (spec - 0.75f) / 0.25f;
-			r = (unsigned char)(255.f);
-			g = (unsigned char)(255.f);
-			b = (unsigned char)(255.f * t);
-		}
-
+		CircularFFT_ColorByEnergy(spec, &r, &g, &b);
 		glColor4ub(r, g, b, 220);
 
 		/* Inner (base) and outer (energy-scaled) endpoints for this bar's edges */
@@ -1054,7 +1135,12 @@ GLUI_DrawVis(GLWindow_State* wdw)
 					float ny = (float) r / WF_ROWS;
 
 					/* Sample local FFT energy for per-column reactivity */
-					size_t spec_idx = (size_t)(nx * (v->wf_width - 1));
+					size_t spec_idx = 0;
+					if (v->wf_width > 1) {
+						spec_idx = (size_t)(nx * (v->wf_width - 1));
+						if (spec_idx >= v->wf_width)
+							spec_idx = v->wf_width - 1;
+					}
 					float spec_norm = v->wf_width > 0 ? v->spectrum[spec_idx] / max_spec : 0.f;
 
 					/* Combine global energy with local spectral energy */
@@ -1138,8 +1224,10 @@ GLUI_DrawSongInfo(GLWindow_State* wdw, int y, int title_zoom, int info_zoom)
 			maxchar -= SONG_INFO_TRAIL_CHARS;
 
 		if (strnlen(tmp, MODP_STR_LENGTH) >= maxchar) {
-			tmp[maxchar] = '\0';
-			strncat(tmp, "...", 4);
+			if (maxchar > 0 && maxchar < MODP_STR_LENGTH - 3) {
+				tmp[maxchar] = '\0';
+				strncat(tmp, "...", MODP_STR_LENGTH - maxchar - 1);
+			}
 		}
 
 		Font_DrawString(wdw, tmp, 0, y - (wdw->font->font_height * title_zoom), title_zoom);
@@ -1183,17 +1271,18 @@ GLUI_DrawLayout(GLWindow_State* wdw)
 	 *  f1:ainc/1;f2:arnd/1;f3,f4:mlth/g000;f5:vis/f
 	 *  0       10      20        31 34
 	 * Total: STATUS_BAR_CHAR_COUNT visible chars. F3=decrement (label), F4=increment (value). */
+	static const struct { int x; int w; } FKEY_LAYOUT[] = {
+		{ 0,   FKEY_LABEL_WIDTH },
+		{ 10,  FKEY_LABEL_WIDTH },
+		{ 20,  11 },  /* "f3,f4:mlth/" */
+		{ 31,  FKEY_VAL_WIDTH },
+		{ 34,  9 }    /* ";f5:vis/f" */
+	};
 	int fz3 = wdw->font->font_width * STATUS_BAR_ZOOM;
-	wdw->layout_fkey_x[0] =  0 * fz3;  /* "f1:ainc/1;" = 10 chars */
-	wdw->layout_fkey_w[0] = 10 * fz3;
-	wdw->layout_fkey_x[1] = 10 * fz3;  /* "f2:arnd/1;" = 10 chars */
-	wdw->layout_fkey_w[1] = 10 * fz3;
-	wdw->layout_fkey_x[2] = 20 * fz3;  /* "f3,f4:mlth/" = 11 chars (decrement) */
-	wdw->layout_fkey_w[2] = 11 * fz3;
-	wdw->layout_fkey_x[3] = 31 * fz3;  /* "000" value = 3 chars (increment) */
-	wdw->layout_fkey_w[3] = 3 * fz3;
-	wdw->layout_fkey_x[4] = 34 * fz3;  /* ";f5:vis/f" = 9 chars */
-	wdw->layout_fkey_w[4] = 9 * fz3;
+	for (int i = 0; i < 5; i++) {
+		wdw->layout_fkey_x[i] = FKEY_LAYOUT[i].x * fz3;
+		wdw->layout_fkey_w[i] = FKEY_LAYOUT[i].w * fz3;
+	}
 
 	/* Determine hover state (convert SDL mouse Y to OpenGL Y) */
 	wdw->hover_item = browser_item_at_mouse_y(wdw);
@@ -1216,9 +1305,15 @@ GLUI_DrawBrowser(GLWindow_State* wdw, int y, int zoom)
 	                zoom);
 
 	for (size_t i = 0; i < wdw->max_items; i++) {
+		/* Guard against out-of-bounds directory access */
+		size_t dir_idx = i + wdw->ps->dir_ofs;
+		if (Directory_NTotal(wdw->ps->dir) > 0 && 
+		    dir_idx >= Directory_NTotal(wdw->ps->dir))
+			break;
+		
 		bool isdir;
 		const char* name = Directory_GetName(wdw->ps->dir,
-		                                     i + wdw->ps->dir_ofs,
+		                                     dir_idx,
 		                                     &isdir);
 
 		/* Hover highlight: white for hovered item, default for others */
@@ -1246,18 +1341,17 @@ GLUI_DrawStatusBar(GLWindow_State* wdw, int y, int zoom)
 	glColor4ub(GRAY(32, 64));
 	GL_DrawRec(0, y, wdw->width, wdw->font->font_height * zoom, true, wdw->width, wdw->height);
 
+	char vis_char = VIS_CHARS[wdw->vis > VIS_NONE ? VIS_NONE : wdw->vis];
+	
 	snprintf(tmp_str, MODP_STR_LENGTH,
 	        "\\999999fff1:\\ccccccffainc/%s\\777777ff;"
 	        "\\999999fff2:\\ccccccffarnd/%s\\777777ff;"
 	        "\\999999fff3,f4:\\ccccccffmlth/%s%.3u"
-	        "\\999999ff;f5:\\ccccccffvis/%s",
+	        "\\999999ff;f5:\\ccccccffvis/%c",
 	        (wdw->ps->auto_inc ? "\\00dd00ff1" : "\\dd0000ff0"),
 	        (wdw->ps->auto_rnd ? "\\00dd00ff1" : "\\dd0000ff0"),
 	        (wdw->ps->auto_inc ? "\\00ff00ff" : "\\ff0000ff"), wdw->ps->min_length,
-	        wdw->vis == VIS_FFT ? "\\dddd00fff" :
-	        (wdw->vis == VIS_SCOPE ? "\\dddd00ffo" :
-	        (wdw->vis == VIS_CIRCULAR ? "\\dddd00ffc" :
-	        (wdw->vis == VIS_WATERFALL ? "\\dddd00ffw" : "\\dddd00ffx"))));
+	        vis_char);
 
 	int x = wdw->width - (wdw->font->font_width * zoom * STATUS_BAR_CHAR_COUNT);
 	Font_DrawString(wdw, tmp_str, x, y - (wdw->font->font_height * zoom), zoom);
@@ -1290,12 +1384,8 @@ void
 GLUI_Draw(GLWindow_State* wdw)
 {
 	/* Compute background clear color before clearing */
-	float boost = wdw->v->mean_energy_band_div16 / MAX_ENERGY * wdw->opts->ui.bg_flash_factor;
-	boost *= boost;
-
-	float bg_r = wdw->opts->ui.clr[0] + wdw->v->reactive_color[0] * REACTIVE_BLEND + boost;
-	float bg_g = wdw->opts->ui.clr[1] + wdw->v->reactive_color[1] * REACTIVE_BLEND + boost;
-	float bg_b = wdw->opts->ui.clr[2] + wdw->v->reactive_color[2] * REACTIVE_BLEND + boost;
+	float bg_r, bg_g, bg_b;
+	Vis_GetBackgroundColor(wdw->v, &wdw->opts->ui, &bg_r, &bg_g, &bg_b);
 	glClearColor(bg_r, bg_g, bg_b, 1.f);
 
 	/* Clear the framebuffer every frame. Trails are now explicit, stored
@@ -1401,9 +1491,8 @@ GLWindow_HandleKeyDown(GLWindow_State* wdw, SDL_Keysym* keysym)
 			GLWindow_HandleFKey(wdw, keysym->sym - SDLK_F1 + 1);
 			break;
 		case SDLK_F6:
-			wdw->opts->ui.clr[0] = (float)rand() / RAND_MAX;
-			wdw->opts->ui.clr[1] = (float)rand() / RAND_MAX;
-			wdw->opts->ui.clr[2] = (float)rand() / RAND_MAX;
+			for (int i = 0; i < 3; i++)
+				wdw->opts->ui.clr[i] = (float)rand() / RAND_MAX;
 			break;
 		case SDLK_o:
 			if (wdw->editor) {
@@ -1607,7 +1696,13 @@ GLWindow_Init(Options* opt, Player_State* ps)
 	gl_wdw->sdl_wdw = sdl_wdw;
 
 	gl_wdw->font = Font_Init(opt->fontpath, opt->font_dbl);
-	assert(gl_wdw->font);
+	if (!gl_wdw->font) {
+		SDL_Log("Font initialization failed");
+		GLWindow_OptionsEditor_Destroy(gl_wdw->editor);
+		free(gl_wdw->editor);
+		free(gl_wdw);
+		return NULL;
+	}
 
 	v = Vis_Init(gl_wdw->width, gl_wdw->height, VIS_NSAMPLES, VIS_NSTARS);
 	gl_wdw->v = v;

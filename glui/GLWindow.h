@@ -29,7 +29,6 @@ typedef struct UiCfg {
 	float perturb_waterfall_factor; /* Spectrogram perturbation */
 	float circ_pulse_factor;    /* Circular vis energy pulse amount */
 	float circ_spin_factor;     /* Circular vis rotation reactivity */
-	float trail_factor;         /* Reverb trail persistence (0 = off, 1 = full) */
 } UiCfg;
 
 typedef struct Options {
@@ -49,13 +48,11 @@ typedef struct Options {
 typedef struct Star {
 	int speed_x, speed_y,
 	    xpos, ypos,
-	    trail_xpos, trail_ypos,
 	    size,
 	    phase, phase_inc,
 	    rotation, rotation_inc;
 
 	bool in_front, visible;
-	float trail_alpha;
 } Star;
 
 struct Vis_State {
