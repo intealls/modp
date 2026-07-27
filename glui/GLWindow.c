@@ -445,7 +445,7 @@ Vis_Init(size_t wdw_width, size_t wdw_height, size_t nsamples, size_t nstars)
 
 	v->nstars = nstars;
 
-	/* Seed PRNG once at initialization */
+	/* Seed PRNG once at initialization; Vis_Init is called exactly once per window */
 	srand((unsigned int)(time(NULL) ^ (intptr_t)v));
 
 	for (size_t i = 0; i < nstars; i++) {
@@ -1224,9 +1224,9 @@ GLUI_DrawSongInfo(GLWindow_State* wdw, int y, int title_zoom, int info_zoom)
 			maxchar -= SONG_INFO_TRAIL_CHARS;
 
 		if (strnlen(tmp, MODP_STR_LENGTH) >= maxchar) {
-			if (maxchar > 0 && maxchar < MODP_STR_LENGTH - 3) {
+			if (maxchar > 0 && maxchar + 3 < MODP_STR_LENGTH) {
 				tmp[maxchar] = '\0';
-				strncat(tmp, "...", MODP_STR_LENGTH - maxchar - 1);
+				snprintf(tmp + maxchar, MODP_STR_LENGTH - maxchar, "...");
 			}
 		}
 
@@ -1341,7 +1341,7 @@ GLUI_DrawStatusBar(GLWindow_State* wdw, int y, int zoom)
 	glColor4ub(GRAY(32, 64));
 	GL_DrawRec(0, y, wdw->width, wdw->font->font_height * zoom, true, wdw->width, wdw->height);
 
-	char vis_char = VIS_CHARS[wdw->vis > VIS_NONE ? VIS_NONE : wdw->vis];
+	char vis_char = VIS_CHARS[(wdw->vis < 0 || wdw->vis > VIS_NONE) ? VIS_NONE : wdw->vis];
 	
 	snprintf(tmp_str, MODP_STR_LENGTH,
 	        "\\999999fff1:\\ccccccffainc/%s\\777777ff;"
