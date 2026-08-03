@@ -13,6 +13,7 @@
 #include <time.h>
 
 #include <fftw3.h>
+#include <assert.h>
 
 #include "GLWindow.h"
 
@@ -198,7 +199,7 @@ GLWindow_OptionsEditor_Destroy(OptionsEditor* ed);
 
 /* ── VISIBILITY CHARACTER MAP ───────────────────────────────────────── */
 
-static const char VIS_CHARS[] = {'f', 'o', 'c', 'w', 'x'};
+static const char VIS_CHARS[] = {'f', 'o', 'w', 'c', 'x'};
 
 /* ── UI Options initialization ───────────────────────────────────────── */
 
@@ -410,8 +411,9 @@ Vis_Init(size_t wdw_width, size_t wdw_height, size_t nsamples, size_t nstars)
 	v->vis_buf = (T*) calloc(v->vis_len, sizeof(T));
 	assert(v->vis_buf);
 
-	v->window = (float*) calloc(v->fft_len, sizeof(float));
+	v->window = (float*) calloc(v->nsamples, sizeof(float));
 	assert(v->window);
+	assert(v->fft_len >= v->nsamples);
 
 	v->signal = (float*) calloc(v->fft_len, sizeof(float));
 	assert(v->signal);
@@ -797,6 +799,8 @@ browser_item_at_mouse_y(const GLWindow_State* wdw)
 static inline float
 scope_sample(const Vis_State* v, float fidx)
 {
+	if (fidx >= v->vis_len)
+		return 0.f;
 	size_t i0 = (size_t)fidx;
 	size_t i1 = i0 + 1;
 	if (i1 >= v->vis_len)
@@ -842,7 +846,7 @@ scope_color_black(GLWindow_State* wdw, size_t i)
 static void
 scope_color_filled(GLWindow_State* wdw, size_t i)
 {
-	glColor4ub(255, (int)((float)(i / 2) * 255.f / (float)wdw->width * 2), 0, 255);
+	glColor4ub(255, (int)((float)i * 255.f / ((float)wdw->width * 2.f)), 0, 255);
 }
 
 static void
@@ -941,8 +945,9 @@ draw_circular_fft(GLWindow_State* wdw)
 
 	/* Reallocate if window was resized */
 	if (n_bars > v->lin_cap) {
-		v->lin = (float*)realloc(v->lin, n_bars * sizeof(float));
-		assert(v->lin);
+		float* tmp = (float*)realloc(v->lin, n_bars * sizeof(float));
+		assert(tmp);
+		v->lin = tmp;
 		v->lin_cap = n_bars;
 	}
 
@@ -1307,8 +1312,7 @@ GLUI_DrawBrowser(GLWindow_State* wdw, int y, int zoom)
 	for (size_t i = 0; i < wdw->max_items; i++) {
 		/* Guard against out-of-bounds directory access */
 		size_t dir_idx = i + wdw->ps->dir_ofs;
-		if (Directory_NTotal(wdw->ps->dir) > 0 && 
-		    dir_idx >= Directory_NTotal(wdw->ps->dir))
+		if (dir_idx >= Directory_NTotal(wdw->ps->dir))
 			break;
 		
 		bool isdir;
@@ -1633,9 +1637,8 @@ GLWindow_Destroy(GLWindow_State* wdw)
 	Vis_Destroy(wdw->v);
 	Font_Destroy(wdw->font);
 
+	SDL_DestroyWindow(wdw->sdl_wdw);
 	free(wdw);
-
-	SDL_Quit();
 }
 
 /* ── Initialization ──────────────────────────────────────────────────── */
@@ -1698,6 +1701,7 @@ GLWindow_Init(Options* opt, Player_State* ps)
 	gl_wdw->font = Font_Init(opt->fontpath, opt->font_dbl);
 	if (!gl_wdw->font) {
 		SDL_Log("Font initialization failed");
+		SDL_DestroyWindow(sdl_wdw);
 		GLWindow_OptionsEditor_Destroy(gl_wdw->editor);
 		free(gl_wdw->editor);
 		free(gl_wdw);
