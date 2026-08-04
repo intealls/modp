@@ -11,6 +11,7 @@
 #include <tinydir.h>
 
 typedef struct GLWindow_State GLWindow_State;
+typedef struct TunnelRing TunnelRing;
 typedef struct Vis_State Vis_State;
 
 #include "Font.h"
@@ -55,6 +56,14 @@ typedef struct Star {
 	bool in_front, visible;
 } Star;
 
+struct TunnelRing {
+	float z;
+	float base_radius;
+	float rotation;
+	float rotation_speed;
+	size_t segments;
+};
+
 struct Vis_State {
 	T* vis_buf;
 	size_t vis_len;
@@ -87,10 +96,17 @@ struct Vis_State {
 	size_t lin_cap;
 	float circ_rotation;
 	float circ_prev_energy;
+
+	/* Tunnel visualizer state */
+	TunnelRing* rings;
+	size_t n_rings;
+	float tunnel_depth;
+	float tunnel_speed;
+	float bass_pulse;
 };
 
 typedef enum Vis { VIS_FFT = 0, VIS_SCOPE = 1, VIS_WATERFALL = 2, VIS_CIRCULAR = 3,
-	VIS_NONE = 4 } Vis;
+	VIS_TUNNEL = 4, VIS_NONE = 5 } Vis;
 
 /* ── Options Editor ──────────────────────────────────────────────────── */
 

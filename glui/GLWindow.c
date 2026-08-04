@@ -59,6 +59,17 @@
 #define VIS_NSAMPLES           384
 #define VIS_NSTARS             100
 
+/* Tunnel visualizer parameters */
+#define TUNNEL_RINGS           24
+#define TUNNEL_SEGMENTS        64
+#define TUNNEL_DEPTH           800.f
+#define TUNNEL_SPEED           4.f
+#define TUNNEL_FOCAL           600.f
+#define TUNNEL_BASE_RADIUS     120.f
+#define TUNNEL_RADIUS_JITTER   40.f
+#define TUNNEL_ROT_SPEED_MIN   0.2f
+#define TUNNEL_ROT_SPEED_MAX   1.5f
+
 /* Zoom levels used across the UI */
 #define ZOOM_BROWSER           2
 #define ZOOM_STATUS            3
@@ -199,7 +210,7 @@ GLWindow_OptionsEditor_Destroy(OptionsEditor* ed);
 
 /* ── VISIBILITY CHARACTER MAP ───────────────────────────────────────── */
 
-static const char VIS_CHARS[] = {'f', 'o', 'w', 'c', 'x'};
+static const char VIS_CHARS[] = {'f', 'o', 'w', 'c', 't', 'x'};
 
 /* ── UI Options initialization ───────────────────────────────────────── */
 
@@ -447,6 +458,25 @@ Vis_Init(size_t wdw_width, size_t wdw_height, size_t nsamples, size_t nstars)
 
 	v->nstars = nstars;
 
+	/* Tunnel visualizer init */
+	v->n_rings = TUNNEL_RINGS;
+	v->tunnel_depth = TUNNEL_DEPTH;
+	v->tunnel_speed = TUNNEL_SPEED;
+	v->bass_pulse = 0.f;
+
+	v->rings = (TunnelRing*) calloc(v->n_rings, sizeof(TunnelRing));
+	assert(v->rings);
+
+	for (size_t i = 0; i < v->n_rings; i++) {
+		v->rings[i].z = (float)(v->n_rings - i) / (float)v->n_rings * v->tunnel_depth;
+		v->rings[i].base_radius = TUNNEL_BASE_RADIUS +
+			(((float)rand() / RAND_MAX) - 0.5f) * TUNNEL_RADIUS_JITTER;
+		v->rings[i].rotation = 0.f;
+		v->rings[i].rotation_speed = TUNNEL_ROT_SPEED_MIN +
+			((float)rand() / RAND_MAX) * (TUNNEL_ROT_SPEED_MAX - TUNNEL_ROT_SPEED_MIN);
+		v->rings[i].segments = TUNNEL_SEGMENTS;
+	}
+
 	/* Seed PRNG once at initialization; Vis_Init is called exactly once per window */
 	srand((unsigned int)(time(NULL) ^ (intptr_t)v));
 
@@ -670,6 +700,7 @@ Vis_Destroy(Vis_State* v)
 	free(v->stars);
 	free(v->wf_buf);
 	free(v->lin);
+	free(v->rings);
 	glDeleteTextures(1, &v->wf_tex);
 	free(v);
 }
@@ -690,6 +721,29 @@ Vis_Update(GLWindow_State* wdw)
 		Vis_DecayReactiveColor(v);
 		/* Decay energy so shake/zoom/perturb/flash stop when paused */
 		v->mean_energy_band_div16 *= 0.9f;
+	}
+
+	/* Tunnel update: advance rings, update bass pulse */
+	if (wdw->vis == VIS_TUNNEL) {
+		size_t bass_n = v->fft_len / 16;
+		float bass = 0.f;
+		for (size_t i = 0; i < bass_n; i++) {
+			float re = v->result[i][0];
+			float im = v->result[i][1];
+			bass += re * re + im * im;
+		}
+		bass /= (float)bass_n;
+		v->bass_pulse = v->bass_pulse * 0.8f + bass * 0.2f;
+
+		for (size_t i = 0; i < v->n_rings; i++) {
+			v->rings[i].z -= v->tunnel_speed;
+			if (v->rings[i].z <= 1.f) {
+				v->rings[i].z = v->tunnel_depth;
+				v->rings[i].base_radius = TUNNEL_BASE_RADIUS +
+					(((float)rand() / RAND_MAX) - 0.5f) * TUNNEL_RADIUS_JITTER;
+			}
+			v->rings[i].rotation += v->rings[i].rotation_speed;
+		}
 	}
 }
 
@@ -1193,6 +1247,45 @@ GLUI_DrawVis(GLWindow_State* wdw)
 		glBindTexture(GL_TEXTURE_2D, 0);
 		GL_OrthoOff();
 		break;
+
+	case VIS_TUNNEL: {
+		if (!playing)
+			break;
+		glBindTexture(GL_TEXTURE_2D, 0);
+		glDisable(GL_TEXTURE_2D);
+		GL_OrthoOn(wdw->width, wdw->height);
+		glEnable(GL_BLEND);
+		glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+		glDisable(GL_DEPTH_TEST);
+
+		float cx = (float)wdw->width / 2.f;
+		float cy = (float)wdw->height / 2.f;
+		float pulse = v->bass_pulse / 1e6f;
+		if (pulse > 1.f) pulse = 1.f;
+
+		for (size_t r_idx = 0; r_idx < v->n_rings; r_idx++) {
+			TunnelRing* ring = &v->rings[r_idx];
+			float scale = TUNNEL_FOCAL / ring->z;
+			float radius = ring->base_radius * (1.f + pulse * 0.5f) * scale;
+			if (radius < 1.f) radius = 1.f;
+			float bright = 1.f - ring->z / v->tunnel_depth;
+			glColor4f(bright, bright * 0.7f, bright * 0.3f, bright * 0.8f);
+
+			glBegin(GL_LINE_LOOP);
+			for (size_t s = 0; s < ring->segments; s++) {
+				float a = (float)s / (float)ring->segments * 2.f * M_PI + ring->rotation;
+				float x = cx + cosf(a) * radius;
+				float y = cy + sinf(a) * radius;
+				glVertex2f(x, y);
+			}
+			glEnd();
+		}
+
+		glEnable(GL_TEXTURE_2D);
+		glEnable(GL_DEPTH_TEST);
+		GL_OrthoOff();
+		break;
+	}
 
 	default:
 		break;
