@@ -69,6 +69,8 @@
 #define TUNNEL_RADIUS_JITTER   40.f
 #define TUNNEL_ROT_SPEED_MIN   0.2f
 #define TUNNEL_ROT_SPEED_MAX   1.5f
+#define TUNNEL_FOLDS            3.f
+#define TUNNEL_WOBBLE           0.15f
 
 /* Zoom levels used across the UI */
 #define ZOOM_BROWSER           2
@@ -723,17 +725,10 @@ Vis_Update(GLWindow_State* wdw)
 		v->mean_energy_band_div16 *= 0.9f;
 	}
 
-	/* Tunnel update: advance rings, update bass pulse */
-	if (wdw->vis == VIS_TUNNEL) {
-		size_t bass_n = v->fft_len / 16;
-		float bass = 0.f;
-		for (size_t i = 0; i < bass_n; i++) {
-			float re = v->result[i][0];
-			float im = v->result[i][1];
-			bass += re * re + im * im;
-		}
-		bass /= (float)bass_n;
-		v->bass_pulse = v->bass_pulse * 0.8f + bass * 0.2f;
+	/* Tunnel update: advance rings, update bass pulse. Only while playing so the
+	 * tunnel freezes like the other visualizers and FFT data is fresh. */
+	if (wdw->ps->am->playing && wdw->vis == VIS_TUNNEL) {
+		v->bass_pulse = v->bass_pulse * 0.8f + v->reactive_color[0] * 0.2f;
 
 		for (size_t i = 0; i < v->n_rings; i++) {
 			v->rings[i].z -= v->tunnel_speed;
@@ -1260,20 +1255,22 @@ GLUI_DrawVis(GLWindow_State* wdw)
 
 		float cx = (float)wdw->width / 2.f;
 		float cy = (float)wdw->height / 2.f;
-		float pulse = v->bass_pulse / 1e6f;
+		float pulse = v->bass_pulse;
 		if (pulse > 1.f) pulse = 1.f;
 
 		for (size_t r_idx = 0; r_idx < v->n_rings; r_idx++) {
 			TunnelRing* ring = &v->rings[r_idx];
 			float scale = TUNNEL_FOCAL / ring->z;
-			float radius = ring->base_radius * (1.f + pulse * 0.5f) * scale;
-			if (radius < 1.f) radius = 1.f;
+			float folds = 2.f + (float)(r_idx % 3);
 			float bright = 1.f - ring->z / v->tunnel_depth;
 			glColor4f(bright, bright * 0.7f, bright * 0.3f, bright * 0.8f);
 
 			glBegin(GL_LINE_LOOP);
 			for (size_t s = 0; s < ring->segments; s++) {
 				float a = (float)s / (float)ring->segments * 2.f * M_PI + ring->rotation;
+				float wobble = 1.f + TUNNEL_WOBBLE * sinf(folds * a);
+				float radius = ring->base_radius * (1.f + pulse * 0.5f) * scale * wobble;
+				if (radius < 1.f) radius = 1.f;
 				float x = cx + cosf(a) * radius;
 				float y = cy + sinf(a) * radius;
 				glVertex2f(x, y);
