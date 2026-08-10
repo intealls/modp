@@ -67,8 +67,8 @@
 #define TUNNEL_FOCAL           600.f
 #define TUNNEL_BASE_RADIUS     120.f
 #define TUNNEL_RADIUS_JITTER   40.f
-#define TUNNEL_ROT_SPEED_MIN   0.2f
-#define TUNNEL_ROT_SPEED_MAX   1.5f
+#define TUNNEL_ROT_SPEED_MIN   0.05f
+#define TUNNEL_ROT_SPEED_MAX   0.3f
 #define TUNNEL_FOLDS            3.f
 #define TUNNEL_WOBBLE           0.15f
 
@@ -1261,14 +1261,15 @@ GLUI_DrawVis(GLWindow_State* wdw)
 		for (size_t r_idx = 0; r_idx < v->n_rings; r_idx++) {
 			TunnelRing* ring = &v->rings[r_idx];
 			float scale = TUNNEL_FOCAL / ring->z;
-			float folds = 2.f + (float)(r_idx % 3);
+			float folds = TUNNEL_FOLDS + (float)(r_idx % 3);
 			float bright = 1.f - ring->z / v->tunnel_depth;
 			glColor4f(bright, bright * 0.7f, bright * 0.3f, bright * 0.8f);
 
 			glBegin(GL_LINE_LOOP);
 			for (size_t s = 0; s < ring->segments; s++) {
 				float a = (float)s / (float)ring->segments * 2.f * M_PI + ring->rotation;
-				float wobble = 1.f + TUNNEL_WOBBLE * sinf(folds * a);
+				float wobble_a = (float)s / (float)ring->segments * 2.f * M_PI;
+				float wobble = 1.f + TUNNEL_WOBBLE * sinf(folds * wobble_a);
 				float radius = ring->base_radius * (1.f + pulse * 0.5f) * scale * wobble;
 				if (radius < 1.f) radius = 1.f;
 				float x = cx + cosf(a) * radius;
