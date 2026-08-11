@@ -112,6 +112,13 @@ static void CircularFFT_LinearizeSpectrum(Vis_State* v, size_t n_bars);
 static float CircularFFT_FindMaxEnergy(const Vis_State* v, size_t n_bars);
 static void CircularFFT_UpdateRotation(Vis_State* v, float energy_norm, float spin_factor);
 
+/* Visualization rendering functions */
+static void GLUI_DrawFFT(GLWindow_State* wdw);
+static void GLUI_DrawScope(GLWindow_State* wdw);
+static void GLUI_DrawCircular(GLWindow_State* wdw);
+static void GLUI_DrawWaterfall(GLWindow_State* wdw);
+static void GLUI_DrawTunnel(GLWindow_State* wdw);
+
 /* ── Helper functions ────────────────────────────────────────────────── */
 
 /* Clamp value to range [min_val, max_val] */
@@ -778,7 +785,7 @@ Vis_UpdateStars(Vis_State* v, const GLWindow_State* wdw)
 /* ── Star rendering ──────────────────────────────────────────────────── */
 
 static void
-draw_star_quads(int xpos, int ypos, int size, int rotation)
+GLUI_DrawStarQuads(int xpos, int ypos, int size, int rotation)
 {
 	glPushMatrix();
 	glTranslatef(xpos, ypos, 0);
@@ -816,7 +823,7 @@ GLUI_DrawStars(GLWindow_State* wdw, bool in_front)
 
 		/* Draw main star at current position */
 		glColor4f(1, 1, 0, flicker);
-		draw_star_quads(xpos, ypos, s->size, s->rotation);
+		GLUI_DrawStarQuads(xpos, ypos, s->size, s->rotation);
 	}
 	glEnable(GL_TEXTURE_2D);
 	GL_OrthoOff();
@@ -826,7 +833,7 @@ GLUI_DrawStars(GLWindow_State* wdw, bool in_front)
 
 /* Convert SDL mouse Y to browser item index, or -1 if not over browser. */
 static int
-browser_item_at_mouse_y(const GLWindow_State* wdw)
+GLUI_GetBrowserItemAtMouseY(const GLWindow_State* wdw)
 {
 	int gl_y = wdw->height - wdw->mouse_y;
 	int browser_bottom = wdw->layout_browser_y;
@@ -846,7 +853,7 @@ browser_item_at_mouse_y(const GLWindow_State* wdw)
 /* Linearly interpolate vis_buf at a floating-point index.
  * vis_buf contains interleaved stereo samples; each call returns one sample. */
 static inline float
-scope_sample(const Vis_State* v, float fidx)
+GLUI_SampleScope(const Vis_State* v, float fidx)
 {
 	if (fidx >= v->vis_len)
 		return 0.f;
@@ -867,14 +874,14 @@ typedef struct ScopeDrawParams {
 } ScopeDrawParams;
 
 static inline void
-scope_expand_symmetric(float *y0, float *y1, float expand)
+GLUI_ScopeExpandSymmetric(float *y0, float *y1, float expand)
 {
 	*y0 -= expand / 2.f;
 	*y1 += expand / 2.f;
 }
 
 static inline void
-scope_expand_toward_higher(float *y0, float *y1, float expand)
+GLUI_ScopeExpandTowardHigher(float *y0, float *y1, float expand)
 {
 	if (*y0 < *y1) {
 		*y0 -= expand / 2.f;
@@ -886,20 +893,20 @@ scope_expand_toward_higher(float *y0, float *y1, float expand)
 }
 
 static void
-scope_color_black(GLWindow_State* wdw, size_t i)
+GLUI_ScopeColorBlack(GLWindow_State* wdw, size_t i)
 {
 	(void)wdw; (void)i;
 	glColor4ub(0, 0, 0, 255);
 }
 
 static void
-scope_color_filled(GLWindow_State* wdw, size_t i)
+GLUI_ScopeColorFilled(GLWindow_State* wdw, size_t i)
 {
 	glColor4ub(255, (int)((float)i * 255.f / ((float)wdw->width * 2.f)), 0, 255);
 }
 
 static void
-draw_scope(GLWindow_State* wdw, const ScopeDrawParams* p)
+GLUI_DrawScopeWithParams(GLWindow_State* wdw, const ScopeDrawParams* p)
 {
 	Vis_State* v = wdw->v;
 	size_t n = (size_t)wdw->width * 2;
@@ -914,8 +921,8 @@ draw_scope(GLWindow_State* wdw, const ScopeDrawParams* p)
 		float src_i = (float)i * vis_scale;
 		float src_i2 = (float)(i + 2) * vis_scale;
 
-		float point = (scope_sample(v, src_i) + scope_sample(v, src_i + 1)) / scale;
-		float next_point = (scope_sample(v, src_i2) + scope_sample(v, src_i2 + 1)) / scale;
+		float point = (GLUI_SampleScope(v, src_i) + GLUI_SampleScope(v, src_i + 1)) / scale;
+		float next_point = (GLUI_SampleScope(v, src_i2) + GLUI_SampleScope(v, src_i2 + 1)) / scale;
 
 		float y0 = wdw->height / 2.f + point;
 		float y1 = wdw->height / 2.f + next_point;
@@ -934,27 +941,27 @@ draw_scope(GLWindow_State* wdw, const ScopeDrawParams* p)
 }
 
 static const ScopeDrawParams scope_outline_params = {
-	.expand_fn = scope_expand_symmetric,
+	.expand_fn = GLUI_ScopeExpandSymmetric,
 	.offset    = SCOPE_OFFSET,
-	.color_fn  = scope_color_black,
+	.color_fn  = GLUI_ScopeColorBlack,
 };
 
 static const ScopeDrawParams scope_filled_params = {
-	.expand_fn = scope_expand_toward_higher,
+	.expand_fn = GLUI_ScopeExpandTowardHigher,
 	.offset    = 0,
-	.color_fn  = scope_color_filled,
+	.color_fn  = GLUI_ScopeColorFilled,
 };
 
 static void
-draw_scope_outline(GLWindow_State* wdw)
+GLUI_DrawScopeOutline(GLWindow_State* wdw)
 {
-	draw_scope(wdw, &scope_outline_params);
+	GLUI_DrawScopeWithParams(wdw, &scope_outline_params);
 }
 
 static void
-draw_scope_filled(GLWindow_State* wdw)
+GLUI_DrawScopeFilled(GLWindow_State* wdw)
 {
-	draw_scope(wdw, &scope_filled_params);
+	GLUI_DrawScopeWithParams(wdw, &scope_filled_params);
 }
 
 /* ── Circular FFT rendering helpers ──────────────────────────────────── */
@@ -987,7 +994,7 @@ CircularFFT_UpdateRotation(Vis_State* v, float energy_norm, float spin_factor)
 /* ── Circular (radial) FFT rendering ─────────────────────────────────── */
 
 static void
-draw_circular_fft(GLWindow_State* wdw)
+GLUI_DrawCircularFFT(GLWindow_State* wdw)
 {
 	Vis_State* v = wdw->v;
 	size_t n_bars = v->fft_len / 2 - 2;  /* use positive half of FFT */
@@ -1089,6 +1096,204 @@ draw_circular_fft(GLWindow_State* wdw)
 	GL_OrthoOff();
 }
 
+/* ── FFT bar visualization ───────────────────────────────────────────── */
+
+static void
+GLUI_DrawFFT(GLWindow_State* wdw)
+{
+	Vis_State* v = wdw->v;
+	float scale = wdw->height / log10(1 << 24);
+	float bar_w = (float) wdw->width * 2.f / v->fft_len;
+
+	glBindTexture(GL_TEXTURE_2D, 0);
+	GL_OrthoOn(wdw->width, wdw->height);
+	glBegin(GL_QUADS);
+	{
+		for (size_t i = 3; i < v->fft_len / 2 + 2; i += 2) {
+			glColor4ub(0, 0, 0, 255);
+
+			glVertex2f((i - 3) * bar_w + 8, (int) (v->spectrum[i - 2] * scale));
+			glVertex2f((i - 1) * bar_w + 8, (int) (v->spectrum[i] * scale));
+
+			glVertex2f((i - 1) * bar_w + 8, 0);
+			glVertex2f((i - 3) * bar_w + 8, 0);
+
+			glColor4ub(255, (int) ((float) i * 255.f / (float) v->fft_len), 0, 255);
+
+			glVertex2f((i - 3) * bar_w, (int) (v->spectrum[i - 2] * scale));
+			glVertex2f((i - 1) * bar_w, (int) (v->spectrum[i] * scale));
+
+			glVertex2f((i - 1) * bar_w, 0);
+			glVertex2f((i - 3) * bar_w, 0);
+		}
+	}
+	glEnd();
+	GL_OrthoOff();
+}
+
+/* ── Oscilloscope visualization ──────────────────────────────────────── */
+
+static void
+GLUI_DrawScope(GLWindow_State* wdw)
+{
+	glBindTexture(GL_TEXTURE_2D, 0);
+	GL_OrthoOn(wdw->width, wdw->height);
+	GLUI_DrawScopeOutline(wdw);
+	GLUI_DrawScopeFilled(wdw);
+	GL_OrthoOff();
+}
+
+/* ── Circular FFT visualization ──────────────────────────────────────── */
+
+static void
+GLUI_DrawCircular(GLWindow_State* wdw)
+{
+	glBindTexture(GL_TEXTURE_2D, 0);
+	GLUI_DrawCircularFFT(wdw);
+}
+
+/* ── Waterfall/spectrogram visualization ─────────────────────────────── */
+
+static void
+GLUI_DrawWaterfall(GLWindow_State* wdw)
+{
+	Vis_State* v = wdw->v;
+
+	GL_OrthoOn(wdw->width, wdw->height);
+	glEnable(GL_TEXTURE_2D);
+	glBindTexture(GL_TEXTURE_2D, v->wf_tex);
+	glColor4ub(255, 255, 255, 255);
+
+	float energy_factor = v->mean_energy_band_div16 / INT16_MAX_F;
+	float perturb = wdw->opts->ui.perturb_waterfall_factor;
+
+	int status_h = wdw->font->font_height * 3;
+	/* Waterfall spans from status bar bottom to song info top */
+	int wf_y0 = wdw->layout_browser_y - wdw->layout_browser_height - status_h;
+	int wf_y1 = wdw->layout_browser_y + wdw->font->font_height * 3;
+	int wf_h = wf_y1 - wf_y0;  /* waterfall height (y-dimension) */
+
+	/* Pixel-grid rendering: split waterfall into independently perturbed blocks
+	 * Float-based cell sizing prevents integer truncation gaps at edges.
+	 * More blocks + higher perturb = heavier pixel chaos */
+	float cell_w_f = (float)wdw->width / WF_COLS;
+	float cell_h_f = (float)wf_h / WF_ROWS;
+
+	/* Find max log-spectrum for normalization (spectrum is log10, not linear) */
+	float max_spec = 0;
+	for (size_t i = 0; i < v->wf_width; i++)
+		if (v->spectrum[i] > max_spec)
+			max_spec = v->spectrum[i];
+	if (max_spec <= 0) max_spec = 1.f;
+
+	glBegin(GL_QUADS);
+	{
+		for (int r = 0; r < WF_ROWS; r++) {
+			for (int c = 0; c < WF_COLS; c++) {
+				/* Normalized position within waterfall area */
+				float nx = (float) c / WF_COLS;
+				float ny = (float) r / WF_ROWS;
+
+				/* Sample local FFT energy for per-column reactivity */
+				size_t spec_idx = 0;
+				if (v->wf_width > 1) {
+					spec_idx = (size_t)(nx * (v->wf_width - 1));
+					if (spec_idx >= v->wf_width)
+						spec_idx = v->wf_width - 1;
+				}
+				float spec_norm = v->wf_width > 0 ? v->spectrum[spec_idx] / max_spec : 0.f;
+
+				/* Combine global energy with local spectral energy */
+				float energy = (energy_factor + spec_norm) * 0.5f;
+
+				/* Per-cell random perturbation uses the square of the applied effect. */
+				float jitter = energy * perturb;
+				jitter *= jitter;
+				float dx = ((((float)rand() / RAND_MAX) - 0.5f) * 2.f * jitter);
+				float dy = ((((float)rand() / RAND_MAX) - 0.5f) * 2.f * jitter);
+				float ds = (((float)rand() / RAND_MAX) * jitter) * WF_DS_SCALE;
+
+				/* Cell screen coordinates with jitter (float throughout — no integer truncation) */
+				float cx0 = c * cell_w_f + dx;
+				float cy0 = (float)wf_y0 + r * cell_h_f + dy;
+				float cx1 = (c + 1) * cell_w_f + dx;
+				float cy1 = (float)wf_y0 + (r + 1) * cell_h_f + dy;
+
+				/* Texture coordinates with jitter */
+				float tx0 = nx;
+				float ty0 = WF_TEXTURE_TOP - ny * WF_TEXTURE_RANGE;
+				float tx1 = (float)(c + 1) / WF_COLS;
+				float ty1 = WF_TEXTURE_TOP - (float)(r + 1) / WF_ROWS * WF_TEXTURE_RANGE;
+
+				/* Perturb texture coords — creates chromatic scrambling at high energies */
+				float dtx = dx / (float)wdw->width * WF_TX_SCALE;
+				float dty = dy / (float)wf_h * WF_TY_SCALE;
+
+				/* Scale offset from center for zoom-pulse effect */
+				float sc_x = (cx0 + cx1) * 0.5f * ds;
+				float sc_y = (cy0 + cy1) * 0.5f * ds;
+
+				glTexCoord2f(tx0 + dtx, ty0 + dty);
+				glVertex2f(cx0 + sc_x, cy0 + sc_y);
+				glTexCoord2f(tx1 + dtx, ty0 + dty);
+				glVertex2f(cx1 + sc_x, cy0 + sc_y);
+				glTexCoord2f(tx1 + dtx, ty1 + dty);
+				glVertex2f(cx1 + sc_x, cy1 + sc_y);
+				glTexCoord2f(tx0 + dtx, ty1 + dty);
+				glVertex2f(cx0 + sc_x, cy1 + sc_y);
+			}
+		}
+	}
+	glEnd();
+	glBindTexture(GL_TEXTURE_2D, 0);
+	GL_OrthoOff();
+}
+
+/* ── Tunnel visualization ────────────────────────────────────────────── */
+
+static void
+GLUI_DrawTunnel(GLWindow_State* wdw)
+{
+	Vis_State* v = wdw->v;
+
+	glBindTexture(GL_TEXTURE_2D, 0);
+	glDisable(GL_TEXTURE_2D);
+	GL_OrthoOn(wdw->width, wdw->height);
+	glEnable(GL_BLEND);
+	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+	glDisable(GL_DEPTH_TEST);
+
+	float cx = (float)wdw->width / 2.f;
+	float cy = (float)wdw->height / 2.f;
+	float pulse = v->bass_pulse;
+	if (pulse > 1.f) pulse = 1.f;
+
+	for (size_t r_idx = 0; r_idx < v->n_rings; r_idx++) {
+		TunnelRing* ring = &v->rings[r_idx];
+		float scale = TUNNEL_FOCAL / ring->z;
+		float folds = TUNNEL_FOLDS + (float)(r_idx % 3);
+		float bright = 1.f - ring->z / v->tunnel_depth;
+		glColor4f(bright, bright * 0.7f, bright * 0.3f, bright * 0.8f);
+
+		glBegin(GL_LINE_LOOP);
+		for (size_t s = 0; s < ring->segments; s++) {
+			float a = (float)s / (float)ring->segments * 2.f * M_PI + ring->rotation;
+			float wobble_a = (float)s / (float)ring->segments * 2.f * M_PI;
+			float wobble = 1.f + TUNNEL_WOBBLE * sinf(folds * wobble_a);
+			float radius = ring->base_radius * (1.f + pulse * 0.5f) * scale * wobble;
+			if (radius < 1.f) radius = 1.f;
+			float x = cx + cosf(a) * radius;
+			float y = cy + sinf(a) * radius;
+			glVertex2f(x, y);
+		}
+		glEnd();
+	}
+
+	glEnable(GL_TEXTURE_2D);
+	glEnable(GL_DEPTH_TEST);
+	GL_OrthoOff();
+}
+
 /* ── Visualization rendering ─────────────────────────────────────────── */
 
 static void
@@ -1102,189 +1307,20 @@ GLUI_DrawVis(GLWindow_State* wdw)
 
 	switch (wdw->vis) {
 	case VIS_FFT:
-		if (!playing)
-			break;
-		{
-			float scale = wdw->height / log10(1 << 24);
-			float bar_w = (float) wdw->width * 2.f / v->fft_len;
-
-			glBindTexture(GL_TEXTURE_2D, 0);
-			GL_OrthoOn(wdw->width, wdw->height);
-			glBegin(GL_QUADS);
-			{
-				for (size_t i = 3; i < v->fft_len / 2 + 2; i += 2) {
-					glColor4ub(0, 0, 0, 255);
-
-					glVertex2f((i - 3) * bar_w + 8, (int) (v->spectrum[i - 2] * scale));
-					glVertex2f((i - 1) * bar_w + 8, (int) (v->spectrum[i] * scale));
-
-					glVertex2f((i - 1) * bar_w + 8, 0);
-					glVertex2f((i - 3) * bar_w + 8, 0);
-
-					glColor4ub(255, (int) ((float) i * 255.f / (float) v->fft_len), 0, 255);
-
-					glVertex2f((i - 3) * bar_w, (int) (v->spectrum[i - 2] * scale));
-					glVertex2f((i - 1) * bar_w, (int) (v->spectrum[i] * scale));
-
-					glVertex2f((i - 1) * bar_w, 0);
-					glVertex2f((i - 3) * bar_w, 0);
-				}
-			}
-			glEnd();
-			GL_OrthoOff();
-		}
+		if (playing) GLUI_DrawFFT(wdw);
 		break;
-
 	case VIS_SCOPE:
-		if (!playing)
-			break;
-		glBindTexture(GL_TEXTURE_2D, 0);
-		GL_OrthoOn(wdw->width, wdw->height);
-		draw_scope_outline(wdw);
-		draw_scope_filled(wdw);
-		GL_OrthoOff();
+		if (playing) GLUI_DrawScope(wdw);
 		break;
-
 	case VIS_CIRCULAR:
-		if (!playing)
-			break;
-		glBindTexture(GL_TEXTURE_2D, 0);
-		draw_circular_fft(wdw);
+		if (playing) GLUI_DrawCircular(wdw);
 		break;
-
 	case VIS_WATERFALL:
-		GL_OrthoOn(wdw->width, wdw->height);
-		glEnable(GL_TEXTURE_2D);
-		glBindTexture(GL_TEXTURE_2D, v->wf_tex);
-		glColor4ub(255, 255, 255, 255);
-
-		float energy_factor = v->mean_energy_band_div16 / INT16_MAX_F;
-		float perturb = wdw->opts->ui.perturb_waterfall_factor;
-
-		int status_h = wdw->font->font_height * 3;
-		/* Waterfall spans from status bar bottom to song info top */
-		int wf_y0 = wdw->layout_browser_y - wdw->layout_browser_height - status_h;
-		int wf_y1 = wdw->layout_browser_y + wdw->font->font_height * 3;
-		int wf_h = wf_y1 - wf_y0;  /* waterfall height (y-dimension) */
-
-		/* Pixel-grid rendering: split waterfall into independently perturbed blocks
-		 * Float-based cell sizing prevents integer truncation gaps at edges.
-		 * More blocks + higher perturb = heavier pixel chaos */
-		float cell_w_f = (float)wdw->width / WF_COLS;
-		float cell_h_f = (float)wf_h / WF_ROWS;
-
-		/* Find max log-spectrum for normalization (spectrum is log10, not linear) */
-		float max_spec = 0;
-		for (size_t i = 0; i < v->wf_width; i++)
-			if (v->spectrum[i] > max_spec)
-				max_spec = v->spectrum[i];
-		if (max_spec <= 0) max_spec = 1.f;
-
-		glBegin(GL_QUADS);
-		{
-			for (int r = 0; r < WF_ROWS; r++) {
-				for (int c = 0; c < WF_COLS; c++) {
-					/* Normalized position within waterfall area */
-					float nx = (float) c / WF_COLS;
-					float ny = (float) r / WF_ROWS;
-
-					/* Sample local FFT energy for per-column reactivity */
-					size_t spec_idx = 0;
-					if (v->wf_width > 1) {
-						spec_idx = (size_t)(nx * (v->wf_width - 1));
-						if (spec_idx >= v->wf_width)
-							spec_idx = v->wf_width - 1;
-					}
-					float spec_norm = v->wf_width > 0 ? v->spectrum[spec_idx] / max_spec : 0.f;
-
-					/* Combine global energy with local spectral energy */
-					float energy = (energy_factor + spec_norm) * 0.5f;
-
-					/* Per-cell random perturbation uses the square of the applied effect. */
-					float jitter = energy * perturb;
-					jitter *= jitter;
-					float dx = ((((float)rand() / RAND_MAX) - 0.5f) * 2.f * jitter);
-					float dy = ((((float)rand() / RAND_MAX) - 0.5f) * 2.f * jitter);
-					float ds = (((float)rand() / RAND_MAX) * jitter) * WF_DS_SCALE;
-
-					/* Cell screen coordinates with jitter (float throughout — no integer truncation) */
-					float cx0 = c * cell_w_f + dx;
-					float cy0 = (float)wf_y0 + r * cell_h_f + dy;
-					float cx1 = (c + 1) * cell_w_f + dx;
-					float cy1 = (float)wf_y0 + (r + 1) * cell_h_f + dy;
-
-					/* Texture coordinates with jitter */
-					float tx0 = nx;
-					float ty0 = WF_TEXTURE_TOP - ny * WF_TEXTURE_RANGE;
-					float tx1 = (float)(c + 1) / WF_COLS;
-					float ty1 = WF_TEXTURE_TOP - (float)(r + 1) / WF_ROWS * WF_TEXTURE_RANGE;
-
-					/* Perturb texture coords — creates chromatic scrambling at high energies */
-					float dtx = dx / (float)wdw->width * WF_TX_SCALE;
-					float dty = dy / (float)wf_h * WF_TY_SCALE;
-
-					/* Scale offset from center for zoom-pulse effect */
-					float sc_x = (cx0 + cx1) * 0.5f * ds;
-					float sc_y = (cy0 + cy1) * 0.5f * ds;
-
-					glTexCoord2f(tx0 + dtx, ty0 + dty);
-					glVertex2f(cx0 + sc_x, cy0 + sc_y);
-					glTexCoord2f(tx1 + dtx, ty0 + dty);
-					glVertex2f(cx1 + sc_x, cy0 + sc_y);
-					glTexCoord2f(tx1 + dtx, ty1 + dty);
-					glVertex2f(cx1 + sc_x, cy1 + sc_y);
-					glTexCoord2f(tx0 + dtx, ty1 + dty);
-					glVertex2f(cx0 + sc_x, cy1 + sc_y);
-				}
-			}
-		}
-		glEnd();
-		glBindTexture(GL_TEXTURE_2D, 0);
-		GL_OrthoOff();
+		GLUI_DrawWaterfall(wdw);
 		break;
-
-	case VIS_TUNNEL: {
-		if (!playing)
-			break;
-		glBindTexture(GL_TEXTURE_2D, 0);
-		glDisable(GL_TEXTURE_2D);
-		GL_OrthoOn(wdw->width, wdw->height);
-		glEnable(GL_BLEND);
-		glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-		glDisable(GL_DEPTH_TEST);
-
-		float cx = (float)wdw->width / 2.f;
-		float cy = (float)wdw->height / 2.f;
-		float pulse = v->bass_pulse;
-		if (pulse > 1.f) pulse = 1.f;
-
-		for (size_t r_idx = 0; r_idx < v->n_rings; r_idx++) {
-			TunnelRing* ring = &v->rings[r_idx];
-			float scale = TUNNEL_FOCAL / ring->z;
-			float folds = TUNNEL_FOLDS + (float)(r_idx % 3);
-			float bright = 1.f - ring->z / v->tunnel_depth;
-			glColor4f(bright, bright * 0.7f, bright * 0.3f, bright * 0.8f);
-
-			glBegin(GL_LINE_LOOP);
-			for (size_t s = 0; s < ring->segments; s++) {
-				float a = (float)s / (float)ring->segments * 2.f * M_PI + ring->rotation;
-				float wobble_a = (float)s / (float)ring->segments * 2.f * M_PI;
-				float wobble = 1.f + TUNNEL_WOBBLE * sinf(folds * wobble_a);
-				float radius = ring->base_radius * (1.f + pulse * 0.5f) * scale * wobble;
-				if (radius < 1.f) radius = 1.f;
-				float x = cx + cosf(a) * radius;
-				float y = cy + sinf(a) * radius;
-				glVertex2f(x, y);
-			}
-			glEnd();
-		}
-
-		glEnable(GL_TEXTURE_2D);
-		glEnable(GL_DEPTH_TEST);
-		GL_OrthoOff();
+	case VIS_TUNNEL:
+		if (playing) GLUI_DrawTunnel(wdw);
 		break;
-	}
-
 	default:
 		break;
 	}
@@ -1381,7 +1417,7 @@ GLUI_DrawLayout(GLWindow_State* wdw)
 	}
 
 	/* Determine hover state (convert SDL mouse Y to OpenGL Y) */
-	wdw->hover_item = browser_item_at_mouse_y(wdw);
+	wdw->hover_item = GLUI_GetBrowserItemAtMouseY(wdw);
 }
 
 /* ── Browser list rendering ──────────────────────────────────────────── */
@@ -1625,6 +1661,68 @@ GLWindow_HandleKeyDown(GLWindow_State* wdw, SDL_Keysym* keysym)
 	}
 }
 
+/* ── Event processing helpers ────────────────────────────────────────── */
+
+static void
+GLWindow_HandleMouseWheel(GLWindow_State* wdw)
+{
+	int gl_y = wdw->height - wdw->mouse_y;
+	int browser_top = wdw->layout_browser_y - wdw->max_items * wdw->layout_item_height;
+	/* Only scroll when mouse is over the browser area */
+	if (gl_y > browser_top && gl_y < wdw->layout_browser_y) {
+		int scroll = (gl_y - browser_top) / wdw->layout_item_height;
+		/* Clamp multi-line scroll (pixel scrolling from trackpads) */
+		if (scroll > MOUSE_SCROLL_CLAMP) scroll = MOUSE_SCROLL_CLAMP;
+		if (scroll < -MOUSE_SCROLL_CLAMP) scroll = -MOUSE_SCROLL_CLAMP;
+		Player_AlterOffset(wdw->ps, scroll);
+	}
+}
+
+static void
+GLWindow_HandleMouseButton(GLWindow_State* wdw, SDL_MouseButtonEvent* button, bool* got_input)
+{
+	if (button->button == SDL_BUTTON_LEFT) {
+		*got_input = true;
+		int mx = button->x;
+		int gl_my = wdw->height - button->y; /* SDL Y → OpenGL Y */
+		int status_h = wdw->font->font_height * 3;
+		bool handled = false;
+
+		/* Check status bar (F-key toggles)
+		 * Font_DrawString draws text at y - font_height*zoom, so the text
+		 * occupies [layout_status_y - status_h, layout_status_y), NOT
+		 * [layout_status_y, layout_status_y + status_h) */
+		if (gl_my >= wdw->layout_status_y - status_h && gl_my < wdw->layout_status_y) {
+			int status_x = wdw->width - (wdw->font->font_width * 3 * STATUS_BAR_CHAR_COUNT);
+			int rel_x = mx - status_x;
+			int f;
+			for (f = 0; f < 5; f++) {
+				if (rel_x >= wdw->layout_fkey_x[f] &&
+				    rel_x < wdw->layout_fkey_x[f] + wdw->layout_fkey_w[f]) {
+					SDL_Keysym ks = { .sym = SDLK_F1 + f };
+					GLWindow_HandleKeyDown(wdw, &ks);
+					handled = true;
+					break;
+				}
+			}
+		}
+
+		/* Check browser items (only if F-key wasn't hit) */
+		if (!handled) {
+			int idx = GLUI_GetBrowserItemAtMouseY(wdw);
+			if (idx >= 0) {
+				/* Navigate to clicked item: idx 0 means stay, idx 1 means +1, etc. */
+				Player_AlterOffset(wdw->ps, idx);
+				Player_Perform(wdw->ps);
+			}
+		}
+	} else if (button->button == SDL_BUTTON_RIGHT) {
+		*got_input = true;
+		SDL_Keysym ks = { .sym = SDLK_BACKSPACE };
+		GLWindow_HandleKeyDown(wdw, &ks);
+	}
+}
+
 /* ── Event processing ────────────────────────────────────────────────── */
 
 bool
@@ -1644,65 +1742,11 @@ GLWindow_ProcessEvents(GLWindow_State* wdw, bool* got_input)
 				break;
 			case SDL_MOUSEWHEEL:
 				*got_input = true;
-				{
-					int gl_y = wdw->height - wdw->mouse_y;
-					int browser_top = wdw->layout_browser_y - wdw->max_items * wdw->layout_item_height;
-					/* Only scroll when mouse is over the browser area */
-					if (event.wheel.y != 0 &&
-					    gl_y > browser_top &&
-					    gl_y < wdw->layout_browser_y) {
-						int scroll = (event.wheel.y > 0) ? -1 : 1;
-						/* Clamp multi-line scroll (pixel scrolling from trackpads) */
-						if (scroll > MOUSE_SCROLL_CLAMP) scroll = MOUSE_SCROLL_CLAMP;
-						if (scroll < -MOUSE_SCROLL_CLAMP) scroll = -MOUSE_SCROLL_CLAMP;
-						Player_AlterOffset(wdw->ps, scroll);
-					}
-				}
+				GLWindow_HandleMouseWheel(wdw);
 				break;
 			case SDL_MOUSEBUTTONDOWN:
-				if (event.button.button == SDL_BUTTON_LEFT) {
-					*got_input = true;
-					int mx = event.button.x;
-					int gl_my = wdw->height - event.button.y; /* SDL Y → OpenGL Y */
-					int status_h = wdw->font->font_height * 3;
-					bool handled = false;
-
-					/* Check status bar (F-key toggles)
-					 * Font_DrawString draws text at y - font_height*zoom, so the text
-					 * occupies [layout_status_y - status_h, layout_status_y), NOT
-					 * [layout_status_y, layout_status_y + status_h) */
-					if (gl_my >= wdw->layout_status_y - status_h && gl_my < wdw->layout_status_y) {
-						int status_x = wdw->width - (wdw->font->font_width * 3 * STATUS_BAR_CHAR_COUNT);
-						int rel_x = mx - status_x;
-						int f;
-						for (f = 0; f < 5; f++) {
-							if (rel_x >= wdw->layout_fkey_x[f] &&
-							    rel_x < wdw->layout_fkey_x[f] + wdw->layout_fkey_w[f]) {
-								SDL_Keysym ks = { .sym = SDLK_F1 + f };
-								GLWindow_HandleKeyDown(wdw, &ks);
-								handled = true;
-								break;
-							}
-						}
-					}
-
-					/* Check browser items (only if F-key wasn't hit) */
-					if (!handled) {
-						int idx = browser_item_at_mouse_y(wdw);
-						if (idx >= 0) {
-							/* Navigate to clicked item: idx 0 means stay, idx 1 means +1, etc. */
-							Player_AlterOffset(wdw->ps, idx);
-							Player_Perform(wdw->ps);
-						}
-					}
-				} else if (event.button.button == SDL_BUTTON_RIGHT) {
-					*got_input = true;
-					SDL_Keysym ks = { .sym = SDLK_BACKSPACE };
-					GLWindow_HandleKeyDown(wdw, &ks);
-				}
+				GLWindow_HandleMouseButton(wdw, &event.button, got_input);
 				break;
-			case SDL_QUIT:
-				return false;
 			case SDL_WINDOWEVENT:
 				if (event.window.event == SDL_WINDOWEVENT_RESIZED)
 					GLWindow_Resize(wdw, event.window.data1, event.window.data2);
