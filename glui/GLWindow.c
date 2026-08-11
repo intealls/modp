@@ -1664,13 +1664,15 @@ GLWindow_HandleKeyDown(GLWindow_State* wdw, SDL_Keysym* keysym)
 /* ── Event processing helpers ────────────────────────────────────────── */
 
 static void
-GLWindow_HandleMouseWheel(GLWindow_State* wdw)
+GLWindow_HandleMouseWheel(GLWindow_State* wdw, int wheel_y)
 {
+	if (wheel_y == 0)
+		return;
 	int gl_y = wdw->height - wdw->mouse_y;
 	int browser_top = wdw->layout_browser_y - wdw->max_items * wdw->layout_item_height;
 	/* Only scroll when mouse is over the browser area */
 	if (gl_y > browser_top && gl_y < wdw->layout_browser_y) {
-		int scroll = (gl_y - browser_top) / wdw->layout_item_height;
+		int scroll = (wheel_y > 0) ? -1 : 1;
 		/* Clamp multi-line scroll (pixel scrolling from trackpads) */
 		if (scroll > MOUSE_SCROLL_CLAMP) scroll = MOUSE_SCROLL_CLAMP;
 		if (scroll < -MOUSE_SCROLL_CLAMP) scroll = -MOUSE_SCROLL_CLAMP;
@@ -1742,11 +1744,13 @@ GLWindow_ProcessEvents(GLWindow_State* wdw, bool* got_input)
 				break;
 			case SDL_MOUSEWHEEL:
 				*got_input = true;
-				GLWindow_HandleMouseWheel(wdw);
+				GLWindow_HandleMouseWheel(wdw, event.wheel.y);
 				break;
 			case SDL_MOUSEBUTTONDOWN:
 				GLWindow_HandleMouseButton(wdw, &event.button, got_input);
 				break;
+			case SDL_QUIT:
+				return false;
 			case SDL_WINDOWEVENT:
 				if (event.window.event == SDL_WINDOWEVENT_RESIZED)
 					GLWindow_Resize(wdw, event.window.data1, event.window.data2);
