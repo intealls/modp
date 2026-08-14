@@ -60,15 +60,15 @@
 #define VIS_NSTARS             100
 
 /* Tunnel visualizer parameters */
-#define TUNNEL_RINGS           24
-#define TUNNEL_SEGMENTS        64
+#define TUNNEL_RINGS           48
+#define TUNNEL_SEGMENTS        128
 #define TUNNEL_DEPTH           800.f
 #define TUNNEL_SPEED           4.f
 #define TUNNEL_FOCAL           600.f
 #define TUNNEL_BASE_RADIUS     120.f
-#define TUNNEL_RADIUS_JITTER   40.f
+#define TUNNEL_RADIUS_JITTER   80.f
 #define TUNNEL_ROT_SPEED_MIN   0.05f
-#define TUNNEL_ROT_SPEED_MAX   0.3f
+#define TUNNEL_ROT_SPEED_MAX   1.0f
 #define TUNNEL_FOLDS            3.f
 #define TUNNEL_WOBBLE           0.15f
 
@@ -471,7 +471,6 @@ Vis_Init(size_t wdw_width, size_t wdw_height, size_t nsamples, size_t nstars)
 	v->n_rings = TUNNEL_RINGS;
 	v->tunnel_depth = TUNNEL_DEPTH;
 	v->tunnel_speed = TUNNEL_SPEED;
-	v->bass_pulse = 0.f;
 
 	v->rings = (TunnelRing*) calloc(v->n_rings, sizeof(TunnelRing));
 	assert(v->rings);
@@ -483,6 +482,7 @@ Vis_Init(size_t wdw_width, size_t wdw_height, size_t nsamples, size_t nstars)
 		v->rings[i].rotation = 0.f;
 		v->rings[i].rotation_speed = TUNNEL_ROT_SPEED_MIN +
 			((float)rand() / RAND_MAX) * (TUNNEL_ROT_SPEED_MAX - TUNNEL_ROT_SPEED_MIN);
+		v->rings[i].energy = 0.f;
 		v->rings[i].segments = TUNNEL_SEGMENTS;
 	}
 
@@ -732,10 +732,8 @@ Vis_Update(GLWindow_State* wdw)
 		v->mean_energy_band_div16 *= 0.9f;
 	}
 
-	/* Tunnel update: advance rings, update bass pulse. Only while playing so the
-	 * tunnel freezes like the other visualizers and FFT data is fresh. */
+	/* Tunnel update: advance rings, update per-ring audio reactivity */
 	if (wdw->ps->am->playing && wdw->vis == VIS_TUNNEL) {
-		v->bass_pulse = v->bass_pulse * 0.8f + v->reactive_color[0] * 0.2f;
 
 		for (size_t i = 0; i < v->n_rings; i++) {
 			v->rings[i].z -= v->tunnel_speed;
@@ -743,8 +741,24 @@ Vis_Update(GLWindow_State* wdw)
 				v->rings[i].z = v->tunnel_depth;
 				v->rings[i].base_radius = TUNNEL_BASE_RADIUS +
 					(((float)rand() / RAND_MAX) - 0.5f) * TUNNEL_RADIUS_JITTER;
+				v->rings[i].rotation_speed = TUNNEL_ROT_SPEED_MIN +
+					((float)rand() / RAND_MAX) * (TUNNEL_ROT_SPEED_MAX - TUNNEL_ROT_SPEED_MIN);
+				/* Chaos kick on respawn */
+				v->rings[i].energy = 0.5f + ((float)rand() / RAND_MAX) * 0.5f;
 			}
-			v->rings[i].rotation += v->rings[i].rotation_speed;
+			
+			/* Map ring to frequency bin and update energy from log-spectrum */
+			size_t avail = v->fft_len / 2 - 2;
+			size_t bin = avail > 0 ? (2 + (i * avail) / v->n_rings) : 2;
+			if (bin >= v->fft_len / 2) bin = v->fft_len / 2 - 1;
+			float raw_e = v->spectrum[bin];
+			if (raw_e < 0.f) raw_e = 0.f;
+			if (raw_e > 4.f) raw_e = 4.f;
+			v->rings[i].energy = v->rings[i].energy * 0.7f + raw_e * 0.3f;
+			
+			/* Rotation speed reacts to energy, bounded so it stays coherent */
+			float speed_boost = v->rings[i].energy * 0.3f;
+			v->rings[i].rotation += v->rings[i].rotation_speed + speed_boost;
 		}
 	}
 }
@@ -1265,25 +1279,40 @@ GLUI_DrawTunnel(GLWindow_State* wdw)
 
 	float cx = (float)wdw->width / 2.f;
 	float cy = (float)wdw->height / 2.f;
-	float pulse = v->bass_pulse;
-	if (pulse > 1.f) pulse = 1.f;
-
 	for (size_t r_idx = 0; r_idx < v->n_rings; r_idx++) {
 		TunnelRing* ring = &v->rings[r_idx];
 		float scale = TUNNEL_FOCAL / ring->z;
 		float folds = TUNNEL_FOLDS + (float)(r_idx % 3);
 		float bright = 1.f - ring->z / v->tunnel_depth;
-		glColor4f(bright, bright * 0.7f, bright * 0.3f, bright * 0.8f);
+		
+		float e = ring->energy;
+		float ring_pulse = e * 1.2f;
+		if (ring_pulse > 1.f) ring_pulse = 1.f;
+		
+		float wobble_amp = TUNNEL_WOBBLE * (1.f + e * 1.5f);
+		
+		/* Rainbow hue driven by ring index and rotation (shifts over time) */
+		float hue = fmodf((float)r_idx * 0.18f + ring->rotation * 0.4f, 6.283185f);
+		float hr = sinf(hue) * 0.5f + 0.5f;
+		float hg = sinf(hue + 2.094f) * 0.5f + 0.5f;
+		float hb = sinf(hue + 4.189f) * 0.5f + 0.5f;
+		
+		/* Blend rainbow with energy-driven brightness, keep depth fade */
+		float ca = bright * (0.5f + e * 0.5f);
+		float cr = hr * ca;
+		float cg = hg * ca;
+		float cb = hb * ca;
+		glColor4f(cr, cg, cb, ca);
 
 		glBegin(GL_LINE_LOOP);
 		for (size_t s = 0; s < ring->segments; s++) {
-			float a = (float)s / (float)ring->segments * 2.f * M_PI + ring->rotation;
+			float angle = (float)s / (float)ring->segments * 2.f * M_PI + ring->rotation;
 			float wobble_a = (float)s / (float)ring->segments * 2.f * M_PI;
-			float wobble = 1.f + TUNNEL_WOBBLE * sinf(folds * wobble_a);
-			float radius = ring->base_radius * (1.f + pulse * 0.5f) * scale * wobble;
+			float wobble = 1.f + wobble_amp * sinf(folds * wobble_a);
+			float radius = ring->base_radius * (1.f + ring_pulse * 0.7f) * scale * wobble;
 			if (radius < 1.f) radius = 1.f;
-			float x = cx + cosf(a) * radius;
-			float y = cy + sinf(a) * radius;
+			float x = cx + cosf(angle) * radius;
+			float y = cy + sinf(angle) * radius;
 			glVertex2f(x, y);
 		}
 		glEnd();

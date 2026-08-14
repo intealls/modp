@@ -61,6 +61,7 @@ struct TunnelRing {
 	float base_radius;
 	float rotation;
 	float rotation_speed;
+	float energy;
 	size_t segments;
 };
 
@@ -102,7 +103,6 @@ struct Vis_State {
 	size_t n_rings;
 	float tunnel_depth;
 	float tunnel_speed;
-	float bass_pulse;
 };
 
 typedef enum Vis { VIS_FFT = 0, VIS_SCOPE = 1, VIS_WATERFALL = 2, VIS_CIRCULAR = 3,
