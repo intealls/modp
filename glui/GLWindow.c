@@ -1276,6 +1276,8 @@ GLUI_DrawTunnel(GLWindow_State* wdw)
 	glEnable(GL_BLEND);
 	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 	glDisable(GL_DEPTH_TEST);
+	glEnable(GL_LINE_SMOOTH);
+	glHint(GL_LINE_SMOOTH_HINT, GL_NICEST);
 
 	float cx = (float)wdw->width / 2.f;
 	float cy = (float)wdw->height / 2.f;
@@ -1318,6 +1320,7 @@ GLUI_DrawTunnel(GLWindow_State* wdw)
 		glEnd();
 	}
 
+	glDisable(GL_LINE_SMOOTH);
 	glEnable(GL_TEXTURE_2D);
 	glEnable(GL_DEPTH_TEST);
 	GL_OrthoOff();
