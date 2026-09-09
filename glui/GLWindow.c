@@ -71,6 +71,10 @@
 #define TUNNEL_ROT_SPEED_MAX   1.0f
 #define TUNNEL_FOLDS            3.f
 #define TUNNEL_WOBBLE           0.15f
+#define TUNNEL_BEAT_PULSE       0.35f  /* global radius pulse at full energy */
+#define TUNNEL_SPEED_BOOST      1.5f   /* extra speed multiplier at full energy */
+#define TUNNEL_ENERGY_ATTACK    0.6f   /* fast-attack smoothing factor */
+#define TUNNEL_ENERGY_DECAY     0.90f  /* slow-decay smoothing factor */
 
 /* Zoom levels used across the UI */
 #define ZOOM_BROWSER           2
@@ -735,8 +739,12 @@ Vis_Update(GLWindow_State* wdw)
 	/* Tunnel update: advance rings, update per-ring audio reactivity */
 	if (wdw->ps->am->playing && wdw->vis == VIS_TUNNEL) {
 
+		/* Track-relative energy (0..1) drives warp speed; peak is clamped >= 1
+		   by Vis_UpdateReactiveColor, which runs first in the playing branch */
+		float beat_norm = v->mean_energy_band_div16 / v->peak_energy;
+
 		for (size_t i = 0; i < v->n_rings; i++) {
-			v->rings[i].z -= v->tunnel_speed;
+			v->rings[i].z -= v->tunnel_speed * (1.f + beat_norm * TUNNEL_SPEED_BOOST);
 			if (v->rings[i].z <= 1.f) {
 				v->rings[i].z = v->tunnel_depth;
 				v->rings[i].base_radius = TUNNEL_BASE_RADIUS +
@@ -755,7 +763,11 @@ Vis_Update(GLWindow_State* wdw)
 			float raw_e = v->spectrum[bin];
 			if (raw_e < 0.f) raw_e = 0.f;
 			if (raw_e > 4.f) raw_e = 4.f;
-			v->rings[i].energy = v->rings[i].energy * 0.7f + raw_e * 0.3f;
+			/* Fast attack, slow decay — transients pop and fade gradually */
+			if (raw_e > v->rings[i].energy)
+				v->rings[i].energy += (raw_e - v->rings[i].energy) * TUNNEL_ENERGY_ATTACK;
+			else
+				v->rings[i].energy *= TUNNEL_ENERGY_DECAY;
 			
 			/* Rotation speed reacts to energy, bounded so it stays coherent */
 			float speed_boost = v->rings[i].energy * 0.3f;
@@ -1282,6 +1294,9 @@ GLUI_DrawTunnel(GLWindow_State* wdw)
 
 	float cx = (float)wdw->width / 2.f;
 	float cy = (float)wdw->height / 2.f;
+	/* Track-relative beat pulse: whole tunnel throbs with the beat */
+	float beat_norm = v->mean_energy_band_div16 / v->peak_energy;
+	float beat_pulse = 1.f + beat_norm * TUNNEL_BEAT_PULSE;
 	for (size_t r_idx = 0; r_idx < v->n_rings; r_idx++) {
 		TunnelRing* ring = &v->rings[r_idx];
 		float scale = TUNNEL_FOCAL / ring->z;
@@ -1314,7 +1329,7 @@ GLUI_DrawTunnel(GLWindow_State* wdw)
 			float angle = (float)s / (float)ring->segments * 2.f * M_PI + ring->rotation;
 			float wobble_a = (float)s / (float)ring->segments * 2.f * M_PI;
 			float wobble = 1.f + wobble_amp * sinf(folds * wobble_a);
-			float radius = ring->base_radius * (1.f + ring_pulse * 0.7f) * scale * wobble;
+			float radius = ring->base_radius * (1.f + ring_pulse * 0.7f) * scale * wobble * beat_pulse;
 			if (radius < 1.f) radius = 1.f;
 			float x = cx + cosf(angle) * radius;
 			float y = cy + sinf(angle) * radius;
