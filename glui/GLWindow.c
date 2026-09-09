@@ -743,8 +743,9 @@ Vis_Update(GLWindow_State* wdw)
 					(((float)rand() / RAND_MAX) - 0.5f) * TUNNEL_RADIUS_JITTER;
 				v->rings[i].rotation_speed = TUNNEL_ROT_SPEED_MIN +
 					((float)rand() / RAND_MAX) * (TUNNEL_ROT_SPEED_MAX - TUNNEL_ROT_SPEED_MIN);
-				/* Chaos kick on respawn */
-				v->rings[i].energy = 0.5f + ((float)rand() / RAND_MAX) * 0.5f;
+				/* Chaos kick on respawn: randomize orientation (an energy kick
+				   would be invisible — the ring is at z=depth where alpha is 0) */
+				v->rings[i].rotation = ((float)rand() / RAND_MAX) * 2.f * M_PI;
 			}
 			
 			/* Map ring to frequency bin and update energy from log-spectrum */
@@ -1291,7 +1292,9 @@ GLUI_DrawTunnel(GLWindow_State* wdw)
 		float ring_pulse = e * 1.2f;
 		if (ring_pulse > 1.f) ring_pulse = 1.f;
 		
-		float wobble_amp = TUNNEL_WOBBLE * (1.f + e * 1.5f);
+		/* Clamp so wobble amplitude stays < 1 and the ring shape never inverts */
+		float e_wob = e > 1.f ? 1.f : e;
+		float wobble_amp = TUNNEL_WOBBLE * (1.f + e_wob * 1.5f);
 		
 		/* Rainbow hue driven by ring index and rotation (shifts over time) */
 		float hue = fmodf((float)r_idx * 0.18f + ring->rotation * 0.4f, 6.283185f);
