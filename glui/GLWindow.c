@@ -76,6 +76,19 @@
 #define TUNNEL_ENERGY_ATTACK    0.6f   /* fast-attack smoothing factor */
 #define TUNNEL_ENERGY_DECAY     0.90f  /* slow-decay smoothing factor */
 
+/* Spectrum band feeding each ring. Log-spaced so every ring covers a musically
+   useful slice; a linear bin split parks the outer rings above 10 kHz where
+   chiptune and lossless material carry no energy at all. */
+#define TUNNEL_BAND_FMIN_HZ     40.f     /* low edge of the first ring */
+#define TUNNEL_BAND_FMAX_HZ     16000.f  /* high edge of the last ring */
+
+/* Ring energy normalization. spectrum[] is absolute log10|X| of 16-bit audio,
+   so raw values span decades and depend on the source level; each ring is
+   mapped onto the TUNNEL_ENERGY_SPAN_DB below its own recent peak instead. */
+#define TUNNEL_ENERGY_FLOOR_DB  (-70.f)  /* at or below this a ring stays dark */
+#define TUNNEL_ENERGY_SPAN_DB   30.f     /* dB range below the peak mapped to 0..1 */
+#define TUNNEL_PEAK_FALL_DB     0.05f    /* peak decay per frame (~3 dB/s at 60 fps) */
+
 /* Zoom levels used across the UI */
 #define ZOOM_BROWSER           2
 #define ZOOM_STATUS            3
@@ -115,6 +128,10 @@ static void Vis_WaterfallUploadTexture(Vis_State* v);
 static void CircularFFT_LinearizeSpectrum(Vis_State* v, size_t n_bars);
 static float CircularFFT_FindMaxEnergy(const Vis_State* v, size_t n_bars);
 static void CircularFFT_UpdateRotation(Vis_State* v, float energy_norm, float spin_factor);
+
+/* Tunnel helpers */
+static void Tunnel_MapBands(Vis_State* v, int fs);
+static float Tunnel_RingBandDb(const Vis_State* v, const TunnelRing* r);
 
 /* Visualization rendering functions */
 static void GLUI_DrawFFT(GLWindow_State* wdw);
@@ -423,7 +440,7 @@ GLWindow_OptionsEditor_HandleKey(GLWindow_State* wdw, SDL_Keysym* keysym)
 /* ── Initialization ──────────────────────────────────────────────────── */
 
 static Vis_State*
-Vis_Init(size_t wdw_width, size_t wdw_height, size_t nsamples, size_t nstars)
+Vis_Init(size_t wdw_width, size_t wdw_height, size_t nsamples, size_t nstars, int fs)
 {
 	Vis_State* v = (Vis_State*) calloc(1, sizeof(Vis_State));
 	assert(v);
@@ -487,8 +504,13 @@ Vis_Init(size_t wdw_width, size_t wdw_height, size_t nsamples, size_t nstars)
 		v->rings[i].rotation_speed = TUNNEL_ROT_SPEED_MIN +
 			((float)rand() / RAND_MAX) * (TUNNEL_ROT_SPEED_MAX - TUNNEL_ROT_SPEED_MIN);
 		v->rings[i].energy = 0.f;
+		v->rings[i].peak_db = TUNNEL_ENERGY_FLOOR_DB;
 		v->rings[i].segments = TUNNEL_SEGMENTS;
 	}
+
+	/* fft_len is the window width, so the Hz-per-ring bands need the sample rate.
+	   Bands stay valid across resizes because fft_len never changes. */
+	Tunnel_MapBands(v, fs);
 
 	/* Seed PRNG once at initialization; Vis_Init is called exactly once per window */
 	srand((unsigned int)(time(NULL) ^ (intptr_t)v));
@@ -718,6 +740,52 @@ Vis_Destroy(Vis_State* v)
 	free(v);
 }
 
+/* ── Tunnel ring setup and audio mapping ─────────────────────────────── */
+
+/* Map every ring onto a log-spaced slice of the spectrum. Bins are fs/fft_len
+ * Hz wide, so the band edges come from the sample rate rather than from the
+ * bin count, which keeps the mapping identical for every window width. */
+static void
+Tunnel_MapBands(Vis_State* v, int fs)
+{
+	float hz_per_bin = (float)fs / (float)v->fft_len;
+	size_t max_bin = v->fft_len / 2 - 1;
+	float fmax = TUNNEL_BAND_FMAX_HZ;
+	float nyquist_hz = (float)max_bin * hz_per_bin;
+
+	if (fmax > nyquist_hz) fmax = nyquist_hz;
+
+	float ratio = fmax / TUNNEL_BAND_FMIN_HZ;
+
+	for (size_t i = 0; i < v->n_rings; i++) {
+		float lo_hz = TUNNEL_BAND_FMIN_HZ * powf(ratio, (float)i / (float)v->n_rings);
+		float hi_hz = TUNNEL_BAND_FMIN_HZ * powf(ratio, (float)(i + 1) / (float)v->n_rings);
+
+		/* Bins 0 and 1 are DC and its skirt - never usable as signal */
+		v->rings[i].bin_lo = clamp_size((size_t)(lo_hz / hz_per_bin), 2, max_bin);
+		v->rings[i].bin_hi = clamp_size((size_t)(hi_hz / hz_per_bin),
+		                                v->rings[i].bin_lo, max_bin);
+	}
+}
+
+/* Loudest bin of the ring's band in dB, as spectrum[] holds log10|X|. The max
+ * over the band, not a single bin, so one spectral null cannot silence a ring. */
+static float
+Tunnel_RingBandDb(const Vis_State* v, const TunnelRing* r)
+{
+	float db = 20.f * v->spectrum[r->bin_lo];
+
+	for (size_t b = r->bin_lo + 1; b <= r->bin_hi; b++) {
+		float band_db = 20.f * v->spectrum[b];
+		if (band_db > db) db = band_db;
+	}
+
+	/* log10(0) is -inf; that, and any NaN, reads as the floor */
+	if (!(db > TUNNEL_ENERGY_FLOOR_DB)) db = TUNNEL_ENERGY_FLOOR_DB;
+
+	return db;
+}
+
 /* ── Main vis update (dispatches sub-functions) ──────────────────────── */
 
 static void
@@ -756,13 +824,23 @@ Vis_Update(GLWindow_State* wdw)
 				v->rings[i].rotation = ((float)rand() / RAND_MAX) * 2.f * M_PI;
 			}
 			
-			/* Map ring to frequency bin and update energy from log-spectrum */
-			size_t avail = v->fft_len / 2 - 2;
-			size_t bin = avail > 0 ? (2 + (i * avail) / v->n_rings) : 2;
-			if (bin >= v->fft_len / 2) bin = v->fft_len / 2 - 1;
-			float raw_e = v->spectrum[bin];
+			/* Auto-gain: normalize the band against the ring's own recent peak so
+			   quiet and loud sources produce the same amount of movement */
+			float db = Tunnel_RingBandDb(v, &v->rings[i]);
+			if (db > v->rings[i].peak_db)
+				v->rings[i].peak_db = db;
+			else
+				v->rings[i].peak_db -= TUNNEL_PEAK_FALL_DB;
+			if (v->rings[i].peak_db < TUNNEL_ENERGY_FLOOR_DB)
+				v->rings[i].peak_db = TUNNEL_ENERGY_FLOOR_DB;
+
+			float lo = v->rings[i].peak_db - TUNNEL_ENERGY_SPAN_DB;
+			if (lo < TUNNEL_ENERGY_FLOOR_DB) lo = TUNNEL_ENERGY_FLOOR_DB;
+			float span = v->rings[i].peak_db - lo;
+			float raw_e = span > 0.f ? (db - lo) / span : 0.f;
 			if (raw_e < 0.f) raw_e = 0.f;
-			if (raw_e > 4.f) raw_e = 4.f;
+			if (raw_e > 1.f) raw_e = 1.f;
+
 			/* Fast attack, slow decay — transients pop and fade gradually */
 			if (raw_e > v->rings[i].energy)
 				v->rings[i].energy += (raw_e - v->rings[i].energy) * TUNNEL_ENERGY_ATTACK;
@@ -1303,13 +1381,10 @@ GLUI_DrawTunnel(GLWindow_State* wdw)
 		float folds = TUNNEL_FOLDS + (float)(r_idx % 3);
 		float bright = 1.f - ring->z / v->tunnel_depth;
 		
+		/* energy is normalized to 0..1 by the auto-gain in Vis_Update, which
+		   keeps wobble_amp far below 1 so the ring shape never inverts */
 		float e = ring->energy;
-		float ring_pulse = e * 1.2f;
-		if (ring_pulse > 1.f) ring_pulse = 1.f;
-		
-		/* Clamp so wobble amplitude stays < 1 and the ring shape never inverts */
-		float e_wob = e > 1.f ? 1.f : e;
-		float wobble_amp = TUNNEL_WOBBLE * (1.f + e_wob * 1.5f);
+		float wobble_amp = TUNNEL_WOBBLE * (1.f + e * 1.5f);
 		
 		/* Rainbow hue driven by ring index and rotation (shifts over time) */
 		float hue = fmodf((float)r_idx * 0.18f + ring->rotation * 0.4f, 6.283185f);
@@ -1329,7 +1404,7 @@ GLUI_DrawTunnel(GLWindow_State* wdw)
 			float angle = (float)s / (float)ring->segments * 2.f * M_PI + ring->rotation;
 			float wobble_a = (float)s / (float)ring->segments * 2.f * M_PI;
 			float wobble = 1.f + wobble_amp * sinf(folds * wobble_a);
-			float radius = ring->base_radius * (1.f + ring_pulse * 0.7f) * scale * wobble * beat_pulse;
+			float radius = ring->base_radius * (1.f + e * 0.7f) * scale * wobble * beat_pulse;
 			if (radius < 1.f) radius = 1.f;
 			float x = cx + cosf(angle) * radius;
 			float y = cy + sinf(angle) * radius;
@@ -1897,7 +1972,8 @@ GLWindow_Init(Options* opt, Player_State* ps)
 		return NULL;
 	}
 
-	v = Vis_Init(gl_wdw->width, gl_wdw->height, VIS_NSAMPLES, VIS_NSTARS);
+	v = Vis_Init(gl_wdw->width, gl_wdw->height, VIS_NSAMPLES, VIS_NSTARS,
+	             gl_wdw->ps->am->fs);
 	gl_wdw->v = v;
 
 	return gl_wdw;
