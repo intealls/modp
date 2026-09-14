@@ -89,6 +89,17 @@
 #define TUNNEL_ENERGY_SPAN_DB   30.f     /* dB range below the peak mapped to 0..1 */
 #define TUNNEL_PEAK_FALL_DB     0.05f    /* peak decay per frame (~3 dB/s at 60 fps) */
 
+/* Ring visibility against the background. Additive glow reads well on a dark
+   background but saturates to white on a light one, so the blend mode, the hue
+   and the luminance of a ring are all chosen relative to the clear color. */
+#define TUNNEL_MIN_ALPHA        0.35f  /* depth fade floor, far rings stay visible */
+#define TUNNEL_GAIN_MIN         0.55f  /* ring color intensity at zero energy */
+#define TUNNEL_CONTRAST         0.35f  /* luminance gap held against the background */
+#define TUNNEL_HUE_PULL         0.5f   /* light bg: lean ring toward its complement */
+#define TUNNEL_HUE_PULL_DARK    0.3f   /* dark bg: same, but keep more of the rainbow */
+#define TUNNEL_BG_LIGHT         0.5f   /* bg luminance at which a bg counts as light */
+#define TUNNEL_SPAWN_FADE       0.15f  /* fraction of depth over which rings fade in */
+
 /* Zoom levels used across the UI */
 #define ZOOM_BROWSER           2
 #define ZOOM_STATUS            3
@@ -1365,10 +1376,19 @@ GLUI_DrawTunnel(GLWindow_State* wdw)
 	glDisable(GL_TEXTURE_2D);
 	GL_OrthoOn(wdw->width, wdw->height);
 	glEnable(GL_BLEND);
-	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 	glDisable(GL_DEPTH_TEST);
 	glEnable(GL_LINE_SMOOTH);
 	glHint(GL_LINE_SMOOTH_HINT, GL_NICEST);
+
+	/* Mirrors the color GLUI_Draw cleared with, one frame newer. Rings must hold
+	   their contrast against it whatever the user configured, so even the blend
+	   mode depends on it: additive glow reads well on a dark background but only
+	   washes out to white on a light one. */
+	float bg_r, bg_g, bg_b;
+	Vis_GetBackgroundColor(v, &wdw->opts->ui, &bg_r, &bg_g, &bg_b);
+	float bg_lum = 0.299f * bg_r + 0.587f * bg_g + 0.114f * bg_b;
+	bool bg_light = bg_lum >= TUNNEL_BG_LIGHT;
+	glBlendFunc(GL_SRC_ALPHA, bg_light ? GL_ONE_MINUS_SRC_ALPHA : GL_ONE);
 
 	float cx = (float)wdw->width / 2.f;
 	float cy = (float)wdw->height / 2.f;
@@ -1388,15 +1408,36 @@ GLUI_DrawTunnel(GLWindow_State* wdw)
 		
 		/* Rainbow hue driven by ring index and rotation (shifts over time) */
 		float hue = fmodf((float)r_idx * 0.18f + ring->rotation * 0.4f, 6.283185f);
-		float hr = sinf(hue) * 0.5f + 0.5f;
-		float hg = sinf(hue + 2.094f) * 0.5f + 0.5f;
-		float hb = sinf(hue + 4.189f) * 0.5f + 0.5f;
-		
-		/* Blend rainbow with energy-driven brightness, keep depth fade */
-		float ca = bright * (0.5f + e * 0.5f);
-		float cr = hr * ca;
-		float cg = hg * ca;
-		float cb = hb * ca;
+		float cr = sinf(hue) * 0.5f + 0.5f;
+		float cg = sinf(hue + 2.094f) * 0.5f + 0.5f;
+		float cb = sinf(hue + 4.189f) * 0.5f + 0.5f;
+
+		/* A hue can land on the background and cancel out, and on a saturated
+		   background one channel is already maxed so there is nothing left to add
+		   there: lean every ring toward the background's complement */
+		float pull = bg_light ? TUNNEL_HUE_PULL : TUNNEL_HUE_PULL_DARK;
+		cr += ((1.f - bg_r) - cr) * pull;
+		cg += ((1.f - bg_g) - cg) * pull;
+		cb += ((1.f - bg_b) - cb) * pull;
+
+		float gain = TUNNEL_GAIN_MIN + (1.f - TUNNEL_GAIN_MIN) * e;
+		cr *= gain; cg *= gain; cb *= gain;
+
+		/* Last word on luminance: rings sit TUNNEL_CONTRAST above a dark
+		   background or below a light one. Scaling up clips per channel, which
+		   only makes a ring brighter. */
+		float lum = 0.299f * cr + 0.587f * cg + 0.114f * cb;
+		float target = fminf(fmaxf(bg_light ? bg_lum - TUNNEL_CONTRAST
+		                                    : bg_lum + TUNNEL_CONTRAST, 0.f), 1.f);
+		if ((bg_light ? lum > target : lum < target) && lum > 0.001f) {
+			float k = target / lum;
+			cr *= k; cg *= k; cb *= k;
+		}
+
+		/* Depth fades a ring to TUNNEL_MIN_ALPHA at the far plane; rings also ramp
+		   in over the last slice of depth so spawning there does not pop */
+		float ca = TUNNEL_MIN_ALPHA + (1.f - TUNNEL_MIN_ALPHA) * bright;
+		ca *= fminf(bright / TUNNEL_SPAWN_FADE, 1.f);
 		glColor4f(cr, cg, cb, ca);
 
 		glBegin(GL_LINE_LOOP);
@@ -1414,6 +1455,7 @@ GLUI_DrawTunnel(GLWindow_State* wdw)
 	}
 
 	glDisable(GL_LINE_SMOOTH);
+	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 	glEnable(GL_TEXTURE_2D);
 	glEnable(GL_DEPTH_TEST);
 	GL_OrthoOff();
