@@ -65,8 +65,10 @@
 #define TUNNEL_DEPTH           800.f
 #define TUNNEL_SPEED           4.f
 #define TUNNEL_FOCAL           900.f
-#define TUNNEL_BASE_RADIUS     60.f
-#define TUNNEL_RADIUS_JITTER   30.f
+#define TUNNEL_BASE_RADIUS     0.f
+#define TUNNEL_RADIUS_JITTER   0.f
+#define TUNNEL_DEV_THRESHOLD   0.5f  /* band energy at which a ring starts deviating from the center */
+#define TUNNEL_DEV_RADIUS      60.f  /* full bloom radius at energy 1.0 */
 #define TUNNEL_ROT_SPEED_MIN  -1.5f
 #define TUNNEL_ROT_SPEED_MAX   2.5f
 #define TUNNEL_FOLDS_MIN       2
@@ -1437,10 +1439,21 @@ GLUI_DrawTunnel(GLWindow_State* wdw)
 			cr *= k; cg *= k; cb *= k;
 		}
 
+		/* Rings rest collapsed at the center; when the band's energy crosses
+		   the deviation threshold the radius blooms outward, scaled by how
+		   far above the threshold it is. dev_n (0..1) also drives the alpha,
+		   so collapsed rings are invisible instead of stacking as a dot at
+		   the center. */
+		float dev_n = 0.f;
+		if (e > TUNNEL_DEV_THRESHOLD)
+			dev_n = (e - TUNNEL_DEV_THRESHOLD) / (1.f - TUNNEL_DEV_THRESHOLD);
+		float dev = TUNNEL_DEV_RADIUS * dev_n;
+
 		/* Depth fades a ring to TUNNEL_MIN_ALPHA at the far plane; rings also ramp
 		   in over the last slice of depth so spawning there does not pop */
 		float ca = TUNNEL_MIN_ALPHA + (1.f - TUNNEL_MIN_ALPHA) * bright;
 		ca *= fminf(bright / TUNNEL_SPAWN_FADE, 1.f);
+		ca *= dev_n;
 		glColor4f(cr, cg, cb, ca);
 
 		glBegin(GL_LINE_LOOP);
@@ -1448,7 +1461,7 @@ GLUI_DrawTunnel(GLWindow_State* wdw)
 			float angle = (float)s / (float)ring->segments * 2.f * M_PI + ring->rotation;
 			float wobble_a = (float)s / (float)ring->segments * 2.f * M_PI;
 			float wobble = 1.f + wobble_amp * sinf(folds * wobble_a);
-			float radius = ring->base_radius * (1.f + e * 1.2f) * scale * wobble * beat_pulse;
+			float radius = (ring->base_radius + dev) * scale * wobble * beat_pulse;
 			if (radius < 1.f) radius = 1.f;
 			float x = cx + cosf(angle) * radius;
 			float y = cy + sinf(angle) * radius;
