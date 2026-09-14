@@ -65,8 +65,8 @@
 #define TUNNEL_DEPTH           800.f
 #define TUNNEL_SPEED           4.f
 #define TUNNEL_FOCAL           600.f
-#define TUNNEL_BASE_RADIUS     120.f
-#define TUNNEL_RADIUS_JITTER   80.f
+#define TUNNEL_BASE_RADIUS     20.f
+#define TUNNEL_RADIUS_JITTER   10.f
 #define TUNNEL_ROT_SPEED_MIN   0.05f
 #define TUNNEL_ROT_SPEED_MAX   1.0f
 #define TUNNEL_FOLDS            3.f
