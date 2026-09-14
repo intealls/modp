@@ -64,6 +64,7 @@ struct TunnelRing {
 	float energy;       /* band energy, normalized 0..1 by auto-gain */
 	float peak_db;      /* slow-decaying band peak, auto-gain reference */
 	float folds;       /* random per-ring wave symmetry (2..7) */
+	float cx_off, cy_off; /* normalized center offset, -0.35..0.35 of screen */
 	size_t bin_lo;      /* inclusive spectrum band of this ring */
 	size_t bin_hi;
 	size_t segments;

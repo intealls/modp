@@ -73,7 +73,7 @@
 #define TUNNEL_ROT_SPEED_MAX   2.5f
 #define TUNNEL_FOLDS_MIN       2
 #define TUNNEL_FOLDS_MAX       7
-#define TUNNEL_WOBBLE           0.3f
+#define TUNNEL_WOBBLE           0.08f
 #define TUNNEL_BEAT_PULSE       0.5f  /* global radius pulse at full energy */
 #define TUNNEL_SPEED_BOOST      1.5f   /* extra speed multiplier at full energy */
 #define TUNNEL_ENERGY_ATTACK    0.6f   /* fast-attack smoothing factor */
@@ -520,6 +520,8 @@ Vis_Init(size_t wdw_width, size_t wdw_height, size_t nsamples, size_t nstars, in
 		v->rings[i].energy = 0.f;
 		v->rings[i].peak_db = TUNNEL_ENERGY_FLOOR_DB;
 		v->rings[i].folds = TUNNEL_FOLDS_MIN + (rand() % (TUNNEL_FOLDS_MAX - TUNNEL_FOLDS_MIN + 1));
+		v->rings[i].cx_off = (((float)rand() / RAND_MAX) - 0.5f) * 0.7f;
+		v->rings[i].cy_off = (((float)rand() / RAND_MAX) - 0.5f) * 0.7f;
 		v->rings[i].segments = TUNNEL_SEGMENTS;
 	}
 
@@ -838,6 +840,8 @@ Vis_Update(GLWindow_State* wdw)
 				   would be invisible — the ring is at z=depth where alpha is 0) */
 				v->rings[i].rotation = ((float)rand() / RAND_MAX) * 2.f * M_PI;
 				v->rings[i].folds = TUNNEL_FOLDS_MIN + (rand() % (TUNNEL_FOLDS_MAX - TUNNEL_FOLDS_MIN + 1));
+				v->rings[i].cx_off = (((float)rand() / RAND_MAX) - 0.5f) * 0.7f;
+				v->rings[i].cy_off = (((float)rand() / RAND_MAX) - 0.5f) * 0.7f;
 			}
 			
 			/* Auto-gain: normalize the band against the ring's own recent peak so
@@ -1461,10 +1465,14 @@ GLUI_DrawTunnel(GLWindow_State* wdw)
 			float angle = (float)s / (float)ring->segments * 2.f * M_PI + ring->rotation;
 			float wobble_a = (float)s / (float)ring->segments * 2.f * M_PI;
 			float wobble = 1.f + wobble_amp * sinf(folds * wobble_a);
+			/* Each ring blooms around its own scattered center, not the screen
+			   center, so hits do not stack into one hole in the middle */
+			float ox = cx + ring->cx_off * (float)wdw->width;
+			float oy = cy + ring->cy_off * (float)wdw->height;
 			float radius = (ring->base_radius + dev) * scale * wobble * beat_pulse;
 			if (radius < 1.f) radius = 1.f;
-			float x = cx + cosf(angle) * radius;
-			float y = cy + sinf(angle) * radius;
+			float x = ox + cosf(angle) * radius;
+			float y = oy + sinf(angle) * radius;
 			glVertex2f(x, y);
 		}
 		glEnd();
