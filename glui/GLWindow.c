@@ -64,14 +64,15 @@
 #define TUNNEL_SEGMENTS        128
 #define TUNNEL_DEPTH           800.f
 #define TUNNEL_SPEED           4.f
-#define TUNNEL_FOCAL           600.f
-#define TUNNEL_BASE_RADIUS     20.f
-#define TUNNEL_RADIUS_JITTER   10.f
-#define TUNNEL_ROT_SPEED_MIN   0.05f
-#define TUNNEL_ROT_SPEED_MAX   1.0f
-#define TUNNEL_FOLDS            3.f
-#define TUNNEL_WOBBLE           0.15f
-#define TUNNEL_BEAT_PULSE       0.35f  /* global radius pulse at full energy */
+#define TUNNEL_FOCAL           900.f
+#define TUNNEL_BASE_RADIUS     60.f
+#define TUNNEL_RADIUS_JITTER   30.f
+#define TUNNEL_ROT_SPEED_MIN  -1.5f
+#define TUNNEL_ROT_SPEED_MAX   2.5f
+#define TUNNEL_FOLDS_MIN       2
+#define TUNNEL_FOLDS_MAX       7
+#define TUNNEL_WOBBLE           0.3f
+#define TUNNEL_BEAT_PULSE       0.5f  /* global radius pulse at full energy */
 #define TUNNEL_SPEED_BOOST      1.5f   /* extra speed multiplier at full energy */
 #define TUNNEL_ENERGY_ATTACK    0.6f   /* fast-attack smoothing factor */
 #define TUNNEL_ENERGY_DECAY     0.90f  /* slow-decay smoothing factor */
@@ -516,6 +517,7 @@ Vis_Init(size_t wdw_width, size_t wdw_height, size_t nsamples, size_t nstars, in
 			((float)rand() / RAND_MAX) * (TUNNEL_ROT_SPEED_MAX - TUNNEL_ROT_SPEED_MIN);
 		v->rings[i].energy = 0.f;
 		v->rings[i].peak_db = TUNNEL_ENERGY_FLOOR_DB;
+		v->rings[i].folds = TUNNEL_FOLDS_MIN + (rand() % (TUNNEL_FOLDS_MAX - TUNNEL_FOLDS_MIN + 1));
 		v->rings[i].segments = TUNNEL_SEGMENTS;
 	}
 
@@ -833,6 +835,7 @@ Vis_Update(GLWindow_State* wdw)
 				/* Chaos kick on respawn: randomize orientation (an energy kick
 				   would be invisible — the ring is at z=depth where alpha is 0) */
 				v->rings[i].rotation = ((float)rand() / RAND_MAX) * 2.f * M_PI;
+				v->rings[i].folds = TUNNEL_FOLDS_MIN + (rand() % (TUNNEL_FOLDS_MAX - TUNNEL_FOLDS_MIN + 1));
 			}
 			
 			/* Auto-gain: normalize the band against the ring's own recent peak so
@@ -1398,7 +1401,7 @@ GLUI_DrawTunnel(GLWindow_State* wdw)
 	for (size_t r_idx = 0; r_idx < v->n_rings; r_idx++) {
 		TunnelRing* ring = &v->rings[r_idx];
 		float scale = TUNNEL_FOCAL / ring->z;
-		float folds = TUNNEL_FOLDS + (float)(r_idx % 3);
+		float folds = ring->folds;
 		float bright = 1.f - ring->z / v->tunnel_depth;
 		
 		/* energy is normalized to 0..1 by the auto-gain in Vis_Update, which
@@ -1445,7 +1448,7 @@ GLUI_DrawTunnel(GLWindow_State* wdw)
 			float angle = (float)s / (float)ring->segments * 2.f * M_PI + ring->rotation;
 			float wobble_a = (float)s / (float)ring->segments * 2.f * M_PI;
 			float wobble = 1.f + wobble_amp * sinf(folds * wobble_a);
-			float radius = ring->base_radius * (1.f + e * 0.7f) * scale * wobble * beat_pulse;
+			float radius = ring->base_radius * (1.f + e * 1.2f) * scale * wobble * beat_pulse;
 			if (radius < 1.f) radius = 1.f;
 			float x = cx + cosf(angle) * radius;
 			float y = cy + sinf(angle) * radius;
